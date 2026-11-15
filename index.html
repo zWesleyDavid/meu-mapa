@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Meu Mapa</title>
+  <meta name="description" content="Meu próprio app de mapas e rotas" />
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <div id="map" aria-label="Mapa"></div>
+
+  <!-- Barra de busca (topo) -->
+  <header class="topbar">
+    <form class="searchbox" id="search-form" autocomplete="off" role="search">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a6 6 0 1 0 3.9 10.6l4.7 4.7 1.4-1.4-4.7-4.7A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+      <input id="search-input" type="search" placeholder="Buscar um lugar ou endereço" aria-label="Buscar" enterkeyhint="search" />
+      <button type="button" id="search-clear" class="icon-btn" aria-label="Limpar" hidden>
+        <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z"/></svg>
+      </button>
+      <button type="button" id="theme-toggle" class="icon-btn" aria-label="Alternar tema">
+        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.4A5.5 5.5 0 0 1 13.4 3.1C13 3 12.5 3 12 3z"/></svg>
+      </button>
+    </form>
+    <ul id="search-results" class="results" role="listbox" hidden></ul>
+  </header>
+
+  <!-- Painel: bottom sheet no celular, lateral no desktop -->
+  <section id="sheet" class="sheet" data-state="peek" aria-live="polite">
+    <div class="sheet-handle" id="sheet-handle" aria-hidden="true"><span></span></div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </section>
+
+  <!-- Menu de contexto (toque longo / clique direito) -->
+  <div id="ctx-menu" class="ctx-menu" hidden>
+    <div class="ctx-title" id="ctx-title">Ponto no mapa</div>
+    <button data-action="to">Rotas até aqui</button>
+    <button data-action="from">Sair daqui</button>
+    <button data-action="info">O que tem aqui?</button>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

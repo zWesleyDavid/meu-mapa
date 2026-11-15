@@ -1,0 +1,142 @@
+// Caixa de busca: autocompletar, histórico recente e navegação por teclado.
+import { CONFIG } from './config.js';
+import { $, bus, state, store, el, debounce } from './core.js';
+import { search } from './geocoder.js';
+import { icon } from './icons.js';
+import { map } from './map.js';
+
+const input = $('#search-input');
+const list = $('#search-results');
+const clearBtn = $('#search-clear');
+const form = $('#search-form');
+
+let items = [];
+let active = -1;
+
+const PLACEHOLDERS = {
+  null: 'Buscar um lugar ou endereço',
+  origin: 'Escolha o ponto de partida',
+  destination: 'Escolha o destino',
+};
+
+export function getRecents() { return store.get('recents', []); }
+
+export function addRecent(place) {
+  const rec = getRecents().filter((p) => p.id !== place.id);
+  rec.unshift({ id: place.id, name: place.name, address: place.address, lng: place.lng, lat: place.lat, kind: place.kind, bbox: place.bbox });
+  store.set('recents', rec.slice(0, CONFIG.recentLimit));
+}
+
+function near() {
+  if (state.userPosition) return state.userPosition;
+  if (!map) return null;
+  const c = map.getCenter();
+  return map.getZoom() > 8 ? { lng: c.lng, lat: c.lat } : null;
+}
+
+function render(places, { recents = false, empty = '' } = {}) {
+  items = places;
+  active = -1;
+  list.innerHTML = '';
+  if (state.pickTarget === 'origin' && state.userPosition) {
+    list.append(row({ isUser: true, name: 'Seu local', address: 'Usar sua localização atual' }, -2, 'start'));
+  }
+  if (recents && places.length) list.append(el('li', { class: 'r-section' }, 'Recentes'));
+  places.forEach((p, i) => list.append(row(p, i, recents ? 'history' : 'pin')));
+  if (!places.length && empty) list.append(el('li', { class: 'r-empty' }, empty));
+  list.hidden = !list.children.length;
+}
+
+function row(p, i, ico) {
+  return el('li', {
+    role: 'option', 'data-i': i,
+    onmousedown: (e) => e.preventDefault(), // não perde o foco antes do click
+    onclick: () => choose(i === -2 ? { isUser: true, name: 'Seu local', ...state.userPosition } : p),
+  },
+  el('span', { class: 'r-ico', html: icon(ico) }),
+  el('div', {},
+    el('div', { class: 'r-main' }, p.name),
+    (p.kind || p.address) ? el('div', { class: 'r-sub' }, [p.kind, p.address].filter(Boolean).join(' · ')) : null));
+}
+
+function choose(place) {
+  list.hidden = true;
+  input.blur();
+  if (!place.isUser) addRecent(place);
+  input.value = state.pickTarget ? '' : place.name;
+  clearBtn.hidden = !input.value;
+  bus.emit('place:chosen', place);
+}
+
+const runSearch = debounce(async (q) => {
+  try {
+    const results = await search(q, near());
+    if (input.value.trim() !== q) return; // resposta atrasada
+    render(results, { empty: 'Nada encontrado' });
+  } catch (err) {
+    if (err.name === 'AbortError') return;
+    render([], { empty: 'Não foi possível buscar agora. Verifique a conexão.' });
+  }
+}, CONFIG.geocoder.debounceMs);
+
+input.addEventListener('input', () => {
+  const q = input.value.trim();
+  clearBtn.hidden = !input.value;
+  if (q.length < 2) { render(getRecents(), { recents: true }); return; }
+  runSearch(q);
+});
+
+input.addEventListener('focus', () => {
+  if (input.value.trim().length < 2) render(getRecents(), { recents: true });
+  else list.hidden = !list.children.length;
+});
+
+input.addEventListener('blur', () => setTimeout(() => {
+  list.hidden = true;
+  if (state.pickTarget && !input.value) cancelPick();
+}, 150));
+
+input.addEventListener('keydown', (e) => {
+  const rows = [...list.querySelectorAll('li[role="option"]')];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!rows.length) return;
+    active = (active + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+    rows.forEach((r, i) => r.setAttribute('aria-selected', i === active));
+    rows[active].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Escape') {
+    input.blur();
+  }
+});
+
+form.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const rows = [...list.querySelectorAll('li[role="option"]')];
+  if (active >= 0 && rows[active]) rows[active].click();
+  else if (items[0]) choose(items[0]);
+});
+
+clearBtn.addEventListener('click', () => {
+  input.value = '';
+  clearBtn.hidden = true;
+  bus.emit('search:cleared');
+  input.focus();
+});
+
+export function startPick(target) {
+  state.pickTarget = target;
+  input.placeholder = PLACEHOLDERS[target];
+  input.value = '';
+  clearBtn.hidden = true;
+  input.focus();
+}
+
+export function cancelPick() {
+  state.pickTarget = null;
+  input.placeholder = PLACEHOLDERS.null;
+}
+
+export function setSearchText(text) {
+  input.value = text || '';
+  clearBtn.hidden = !input.value;
+}
