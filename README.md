@@ -20,14 +20,19 @@ Precisa de https. As formas mais rápidas:
 No celular, use "Adicionar à tela inicial" para instalar como app.
 
 ## O que já faz
-- Mapa vetorial com tema claro/escuro (segue o sistema; botão para alternar)
-- Sua localização com direção (bússola)
-- Busca com autocompletar, priorizando resultados perto de você, e histórico de recentes
-- Toque num ponto de interesse do mapa para ver detalhes
+- Visual próprio: tema escuro (limão) e claro (azul-marinho + coral), seguindo o sistema ou pelo botão
+- Topo em estilo de sinalização de trânsito nas rotas e na navegação
+- Sua localização (GPS próprio), busca com autocompletar, salvos e recentes
+- Categorias rápidas (Comida, Café, Combustível, Farmácia) num raio de 2 km
+- Card do lugar com tempo de carro, distância e horário de chegada
 - Toque longo (ou clique direito): "Rotas até aqui", "Sair daqui", "O que tem aqui?"
-- Rotas de carro, bike e a pé, com o tempo de cada modo, rotas alternativas (toque na linha cinza ou no card) e passo a passo em português
-- Painel arrastável no celular (3 alturas) e painel lateral em telas largas
-- Instalável (manifest + service worker)
+- Rotas de carro, bike e a pé, com alternativas e passo a passo em português
+- **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
+  tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
+  tela sempre ligada e visão geral/recentralizar
+- **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
+  Se a partida não for sua localização, o Iniciar já abre em modo simulação.
+- Painel arrastável no celular e coluna lateral em telas largas; instalável (PWA)
 
 ## Estrutura
 
@@ -40,6 +45,10 @@ js/map.js             tudo que toca o MapLibre (camadas, marcadores, câmera, ge
 js/geocoder.js        busca/geocodificação reversa (Photon) → formato Place
 js/routing.js         rotas (OSRM) + gerador de instruções em pt-BR
 js/sheet.js           bottom sheet arrastável
+js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálculo)
+js/geo.js             geometria: distâncias, projeção na rota
+js/location.js        GPS do usuário
+js/places.js          categorias próximas (Overpass)
 js/search-ui.js       caixa de busca, recentes, teclado
 js/views.js           renderização das telas do painel
 js/main.js            controlador: liga tudo
@@ -58,6 +67,7 @@ No console: `meuMapa.state`, `meuMapa.map()`, `meuMapa.bus`.
 | Mapa claro | OpenFreeMap (`liberty`) | Sem limite declarado, sem chave |
 | Mapa escuro | CARTO Dark Matter | Grátis para uso não comercial |
 | Busca | Photon (Komoot) | Não usar para tráfego pesado |
+| Categorias | Overpass API | Uso justo, sem chave |
 | Rotas | OSRM da FOSSGIS (routing.openstreetmap.de) | Servidor de demonstração; para escala, subir o próprio |
 
 Quando quiser mexer nos "pesos" das ruas (evitar morros, priorizar ciclovias, penalizar trechos), o caminho é subir seu próprio **OSRM**, **Valhalla** ou **GraphHopper** com o recorte do OSM da sua região e apontar `config.js` para ele.

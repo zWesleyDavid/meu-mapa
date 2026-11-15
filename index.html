@@ -5,39 +5,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <title>Meu Mapa</title>
   <meta name="description" content="Meu próprio app de mapas e rotas" />
-  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#101317" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#EEF2F5" media="(prefers-color-scheme: light)" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Barlow+Condensed:wght@600;700;800&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <link rel="stylesheet" href="css/app.css" />
 </head>
 <body>
   <div id="map" aria-label="Mapa"></div>
 
-  <!-- Barra de busca (topo) -->
-  <header class="topbar">
-    <form class="searchbox" id="search-form" autocomplete="off" role="search">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 4a6 6 0 1 0 3.9 10.6l4.7 4.7 1.4-1.4-4.7-4.7A6 6 0 0 0 10 4zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
-      <input id="search-input" type="search" placeholder="Buscar um lugar ou endereço" aria-label="Buscar" enterkeyhint="search" />
-      <button type="button" id="search-clear" class="icon-btn" aria-label="Limpar" hidden>
-        <svg viewBox="0 0 24 24"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12 19 6.4 17.6 5 12 10.6z"/></svg>
-      </button>
-      <button type="button" id="theme-toggle" class="icon-btn" aria-label="Alternar tema">
-        <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.5 0-1-.1-1.4A5.5 5.5 0 0 1 13.4 3.1C13 3 12.5 3 12 3z"/></svg>
-      </button>
-    </form>
-    <ul id="search-results" class="results" role="listbox" hidden></ul>
-  </header>
+  <!-- Coluna de painéis: no celular os filhos ficam soltos; no desktop vira a coluna da esquerda -->
+  <div class="panel-col">
+    <!-- Busca + categorias -->
+    <header class="topbar" id="topbar">
+      <form class="searchbox" id="search-form" autocomplete="off" role="search">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <label for="search-input" class="sr-only">Buscar</label>
+        <input id="search-input" type="search" placeholder="Buscar um lugar ou endereço" enterkeyhint="search" />
+        <button type="button" id="search-clear" class="icon-btn" aria-label="Limpar busca" hidden>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+        <button type="button" id="theme-toggle" class="square-btn" aria-label="Alternar tema"></button>
+      </form>
+      <div class="chips" id="chips"></div>
+      <ul id="search-results" class="results" role="listbox" hidden></ul>
+    </header>
 
-  <!-- Painel: bottom sheet no celular, lateral no desktop -->
-  <section id="sheet" class="sheet" data-state="peek" aria-live="polite">
-    <div class="sheet-handle" id="sheet-handle" aria-hidden="true"><span></span></div>
-    <div class="sheet-body" id="sheet-body"></div>
-  </section>
+    <!-- Placa DE/PARA + modos (só no modo rotas) -->
+    <div class="route-top" id="route-top" hidden></div>
+
+    <!-- Painel: bottom sheet no celular, card na coluna no desktop -->
+    <section id="sheet" class="sheet" data-state="hidden" aria-live="polite">
+      <div class="sheet-handle" id="sheet-handle" aria-hidden="true"><span></span></div>
+      <div class="sheet-body" id="sheet-body"></div>
+    </section>
+  </div>
+
+  <!-- Botões flutuantes do mapa -->
+  <div class="map-fabs" id="map-fabs">
+    <button class="fab" id="btn-compass" aria-label="Apontar para o norte" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M12 3l4 9h-8z"/><path d="M12 21l-4-9h8z"/></svg>
+    </button>
+    <button class="fab accent" id="btn-locate" aria-label="Minha localização">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+  </div>
+
+  <!-- Modo navegação -->
+  <div id="nav" class="nav" hidden></div>
 
   <!-- Menu de contexto (toque longo / clique direito) -->
   <div id="ctx-menu" class="ctx-menu" hidden>

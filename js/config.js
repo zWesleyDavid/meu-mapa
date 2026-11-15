@@ -24,11 +24,29 @@ export const CONFIG = {
   // suba seu próprio OSRM/Valhalla e troque as URLs abaixo.
   routing: {
     profiles: {
-      car:  { label: 'Carro',  url: 'https://routing.openstreetmap.de/routed-car/route/v1/driving/' },
-      bike: { label: 'Bike',   url: 'https://routing.openstreetmap.de/routed-bike/route/v1/driving/' },
-      foot: { label: 'A pé',   url: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/' },
+      car:  { label: 'Carro', url: 'https://routing.openstreetmap.de/routed-car/route/v1/driving/',  simSpeed: 13 },
+      bike: { label: 'Bike',  url: 'https://routing.openstreetmap.de/routed-bike/route/v1/driving/', simSpeed: 5.5 },
+      foot: { label: 'A pé',  url: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/', simSpeed: 3 },
     },
     defaultProfile: 'car',
+  },
+
+  // Categorias rápidas (busca de pontos próximos via Overpass / OpenStreetMap).
+  overpass: 'https://overpass-api.de/api/interpreter',
+  categories: [
+    { id: 'food',     label: 'Comida',      icon: 'food',     kind: 'Restaurante', filter: '["amenity"~"^(restaurant|fast_food)$"]' },
+    { id: 'cafe',     label: 'Café',        icon: 'cafe',     kind: 'Café',        filter: '["amenity"="cafe"]' },
+    { id: 'fuel',     label: 'Combustível', icon: 'fuel',     kind: 'Posto',       filter: '["amenity"="fuel"]' },
+    { id: 'pharmacy', label: 'Farmácia',    icon: 'pharmacy', kind: 'Farmácia',    filter: '["amenity"="pharmacy"]' },
+  ],
+  categoryRadius: 2000,
+
+  // Navegação
+  nav: {
+    offRouteMeters: 45,      // distância da rota para considerar "fora da rota"
+    offRouteFixes: 3,        // leituras seguidas fora da rota antes de recalcular
+    arriveMeters: 25,
+    pitch: 55,
   },
 
   recentLimit: 8,

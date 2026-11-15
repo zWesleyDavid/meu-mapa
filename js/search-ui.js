@@ -15,11 +15,21 @@ let active = -1;
 
 const PLACEHOLDERS = {
   null: 'Buscar um lugar ou endereço',
-  origin: 'Escolha o ponto de partida',
-  destination: 'Escolha o destino',
+  origin: 'De onde você vai sair?',
+  destination: 'Para onde você vai?',
 };
 
 export function getRecents() { return store.get('recents', []); }
+export function getSaved() { return store.get('saved', []); }
+export function isSaved(place) { return getSaved().some((p) => p.id === place.id); }
+export function toggleSaved(place) {
+  const list = getSaved();
+  const exists = list.some((p) => p.id === place.id);
+  const next = exists ? list.filter((p) => p.id !== place.id)
+    : [{ id: place.id, name: place.name, address: place.address, lng: place.lng, lat: place.lat, kind: place.kind }, ...list];
+  store.set('saved', next.slice(0, 50));
+  return !exists;
+}
 
 export function addRecent(place) {
   const rec = getRecents().filter((p) => p.id !== place.id);
@@ -35,26 +45,37 @@ function near() {
 }
 
 function render(places, { recents = false, empty = '' } = {}) {
-  items = places;
+  items = [];
   active = -1;
   list.innerHTML = '';
   if (state.pickTarget === 'origin' && state.userPosition) {
-    list.append(row({ isUser: true, name: 'Seu local', address: 'Usar sua localização atual' }, -2, 'start'));
+    list.append(row({ isUser: true, name: 'Sua localização', address: 'Usar o GPS' }, 'locate'));
   }
-  if (recents && places.length) list.append(el('li', { class: 'r-section' }, 'Recentes'));
-  places.forEach((p, i) => list.append(row(p, i, recents ? 'history' : 'pin')));
-  if (!places.length && empty) list.append(el('li', { class: 'r-empty' }, empty));
+  if (recents) {
+    const saved = getSaved();
+    if (saved.length) {
+      list.append(el('li', { class: 'r-section' }, 'Salvos'));
+      saved.slice(0, 5).forEach((p) => list.append(row(p, 'bookmark')));
+    }
+    const rec = places.filter((p) => !saved.some((x) => x.id === p.id));
+    if (rec.length) list.append(el('li', { class: 'r-section' }, 'Recentes'));
+    rec.forEach((p) => list.append(row(p, 'history')));
+  } else {
+    places.forEach((p) => list.append(row(p, 'pin')));
+  }
+  if (!places.length && !recents && empty) list.append(el('li', { class: 'r-empty' }, empty));
   list.hidden = !list.children.length;
 }
 
-function row(p, i, ico) {
+function row(p, ico) {
+  items.push(p);
   return el('li', {
-    role: 'option', 'data-i': i,
+    role: 'option',
     onmousedown: (e) => e.preventDefault(), // não perde o foco antes do click
-    onclick: () => choose(i === -2 ? { isUser: true, name: 'Seu local', ...state.userPosition } : p),
+    onclick: () => choose(p.isUser ? { isUser: true, name: 'Sua localização', ...state.userPosition } : p),
   },
   el('span', { class: 'r-ico', html: icon(ico) }),
-  el('div', {},
+  el('div', { style: 'min-width:0' },
     el('div', { class: 'r-main' }, p.name),
     (p.kind || p.address) ? el('div', { class: 'r-sub' }, [p.kind, p.address].filter(Boolean).join(' · ')) : null));
 }
@@ -113,7 +134,7 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   const rows = [...list.querySelectorAll('li[role="option"]')];
   if (active >= 0 && rows[active]) rows[active].click();
-  else if (items[0]) choose(items[0]);
+  else if (rows[0]) rows[0].click();
 });
 
 clearBtn.addEventListener('click', () => {
@@ -125,6 +146,7 @@ clearBtn.addEventListener('click', () => {
 
 export function startPick(target) {
   state.pickTarget = target;
+  document.body.classList.add('picking');
   input.placeholder = PLACEHOLDERS[target];
   input.value = '';
   clearBtn.hidden = true;
@@ -133,6 +155,7 @@ export function startPick(target) {
 
 export function cancelPick() {
   state.pickTarget = null;
+  document.body.classList.remove('picking');
   input.placeholder = PLACEHOLDERS.null;
 }
 

@@ -46,11 +46,6 @@ const SIDE = {
   'sharp left': 'vire acentuadamente à esquerda',
 };
 
-const ROTATION = {
-  'sharp right': 135, 'right': 90, 'slight right': 45, 'straight': 0,
-  'slight left': -45, 'left': -90, 'sharp left': -135,
-};
-
 const COMPASS = ['norte', 'nordeste', 'leste', 'sudeste', 'sul', 'sudoeste', 'oeste', 'noroeste'];
 
 const MASC = /^(viaduto|elevado|t[uú]nel|acesso|anel|contorno|largo|beco|caminho|boulevard|trevo|corredor|parque|cais|calçadão|morro|loteamento|condom[ií]nio)\b/i;
@@ -114,23 +109,49 @@ export function instruction(raw) {
   }
 }
 
+const ICON_BY_MOD = {
+  'straight': 'straight', 'right': 'right', 'left': 'left',
+  'slight right': 'slight-right', 'slight left': 'slight-left',
+  'sharp right': 'sharp-right', 'sharp left': 'sharp-left', 'uturn': 'uturn',
+};
+
 function stepIcon(raw) {
   const { type, modifier } = raw.maneuver || {};
-  if (type === 'depart') return { name: 'start', rot: 0 };
-  if (type === 'arrive') return { name: 'flag', rot: 0 };
-  if (type?.includes('roundabout') || type?.includes('rotary')) return { name: 'roundabout', rot: 0 };
-  if (modifier === 'uturn') return { name: 'uturn', rot: 0 };
-  return { name: 'arrow', rot: ROTATION[modifier] ?? 0 };
+  if (type === 'depart') return 'depart';
+  if (type === 'arrive') return 'arrive';
+  if (type?.includes('roundabout') || type?.includes('rotary')) return 'roundabout';
+  return ICON_BY_MOD[modifier] || 'straight';
+}
+
+/** Versão curta, sem nome de rua (para a placa quando a via não tem nome). */
+export function shortInstruction(raw) {
+  const m = raw.maneuver || {};
+  const mod = m.modifier;
+  const side = mod && mod.includes('right') ? 'à direita' : mod && mod.includes('left') ? 'à esquerda' : '';
+  switch (m.type) {
+    case 'arrive': return 'Destino';
+    case 'depart': return 'Siga em frente';
+    case 'roundabout': case 'rotary': return m.exit ? `Rotatória, ${m.exit}ª saída` : 'Rotatória';
+    case 'exit roundabout': case 'exit rotary': return 'Saia da rotatória';
+    case 'fork': return `Mantenha-se ${side || 'no centro'}`;
+    case 'on ramp': return `Acesso ${side}`.trim();
+    case 'off ramp': return `Saída ${side}`.trim();
+    case 'merge': return 'Incorpore-se';
+    default: return cap(SIDE[mod] || 'Siga em frente');
+  }
 }
 
 function toStep(raw) {
   return {
     text: instruction(raw),
+    short: shortInstruction(raw),
+    name: streetName(raw),
     distance: raw.distance,
     duration: raw.duration,
     location: raw.maneuver?.location,
     icon: stepIcon(raw),
     type: raw.maneuver?.type,
+    modifier: raw.maneuver?.modifier,
   };
 }
 
