@@ -30,6 +30,7 @@ export function featureToPlace(f) {
     name,
     address: [...new Set(parts)].join(', '),
     kind: KIND_LABELS[p.osm_value] || '',
+    hasStreet: !!street,
     lng, lat,
     bbox: p.extent ? [p.extent[0], p.extent[3], p.extent[2], p.extent[1]] : null, // [w,s,e,n]
   };
@@ -58,4 +59,18 @@ export async function reverse(lng, lat) {
   const place = featureToPlace(f);
   // Mantém o ponto exato clicado, não o do objeto encontrado.
   return { ...place, lng, lat };
+}
+
+/** Endereço legível de um ponto: "Rua X, 123 · Bairro, Cidade" (ou null). */
+export async function reverseAddress(lng, lat) {
+  const params = new URLSearchParams({ lon: lng, lat, limit: 1 });
+  const res = await fetch(`${CONFIG.geocoder.reverse}?${params}`);
+  if (!res.ok) return null;
+  const f = (await res.json()).features?.[0];
+  if (!f) return null;
+  const p = f.properties || {};
+  const street = p.street || (p.osm_key === 'highway' ? p.name : null);
+  const line1 = street ? [street, p.housenumber].filter(Boolean).join(', ') : null;
+  const area = [p.district || p.locality, p.city].filter((x, i, a) => x && a.indexOf(x) === i).join(', ');
+  return [line1, area].filter(Boolean).join(' · ') || null;
 }

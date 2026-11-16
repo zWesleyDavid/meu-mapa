@@ -4,6 +4,7 @@ import { $, bus, state, store, el, toast } from './core.js';
 import { icon } from './icons.js';
 import * as M from './map.js';
 import { reverse } from './geocoder.js';
+import { getDetails } from './details.js';
 import { getRoutes } from './routing.js';
 import { fromTiles, fromOverpass, mergePlaces, cancelNearby } from './places.js';
 import { startLocation } from './location.js';
@@ -67,6 +68,7 @@ function mount(node, sheetState) {
 }
 
 function setMode(mode) {
+  if (mode !== 'place') delete body.dataset.place;
   document.body.classList.toggle('routing', mode === 'directions');
   routeTop.hidden = mode !== 'directions';
 }
@@ -85,6 +87,8 @@ function showIdle() {
 // ----- Lugar -----
 let placeInfo = null;
 let infoToken = 0;
+let placeDetails = null;
+let detailsToken = 0;
 
 function showPlace(place, { fly = false } = {}) {
   const changed = state.selectedPlace?.id !== place.id;
@@ -95,7 +99,7 @@ function showPlace(place, { fly = false } = {}) {
   M.setMarker('origin', null);
   M.setMarker('destination', null);
   M.setMarker('place', place);
-  if (changed) { placeInfo = null; loadPlaceInfo(place); }
+  if (changed) { placeInfo = null; placeDetails = { loading: true }; loadPlaceInfo(place); loadPlaceDetails(place); }
   renderPlace();
   if (fly) M.flyToPlace(place);
 }
@@ -103,14 +107,29 @@ function showPlace(place, { fly = false } = {}) {
 function renderPlace() {
   const place = state.selectedPlace;
   if (!place) return;
-  mount(placeView(place, {
+  const firstOpen = body.dataset.place !== place.id;
+  body.dataset.place = place.id;
+  const node = placeView(place, {
     info: placeInfo,
+    details: placeDetails,
+    onCopy: async (text) => { try { await navigator.clipboard.writeText(text); toast('Endereço copiado'); } catch { toast('Não foi possível copiar.'); } },
     saved: isSaved(place),
     onClose: () => { setSearchText(''); listState.category ? showList() : showIdle(); },
     onDirections: () => openDirections(place),
     onSave: () => { const on = toggleSaved(place); toast(on ? 'Salvo' : 'Removido dos salvos'); renderPlace(); },
     onShare: () => sharePlace(place),
-  }), 'peek');
+  });
+  // Primeira vez: abre na metade para mostrar o começo dos detalhes; depois só atualiza o conteúdo.
+  if (firstOpen) mount(node, 'half');
+  else body.replaceChildren(node);
+}
+
+async function loadPlaceDetails(place) {
+  const token = ++detailsToken;
+  const d = await getDetails(place);
+  if (token !== detailsToken || state.selectedPlace?.id !== place.id) return;
+  placeDetails = d;
+  if (state.view === 'place') renderPlace();
 }
 
 async function loadPlaceInfo(place) {

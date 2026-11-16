@@ -57,11 +57,12 @@ function buildQuery(category, center, radius) {
 }
 
 /** Tenta o 1º servidor; se demorar, dispara o próximo; usa o primeiro que responder. */
-function hedgedFetch(query) {
+export function hedgedFetch(query) {
   const servers = CONFIG.overpass;
   const controllers = [];
   let settled = false;
-  return new Promise((resolve, reject) => {
+  let cancel = () => {};
+  const promise = new Promise((resolve, reject) => {
     let failures = 0;
     let started = 0;
     const timers = [];
@@ -90,8 +91,9 @@ function hedgedFetch(query) {
       if (started < servers.length) timers.push(setTimeout(launch, CONFIG.overpassHedgeMs));
     };
     launch();
-    inflight = { cancel: () => done(reject, Object.assign(new Error('cancelado'), { name: 'AbortError' })) };
+    cancel = () => done(reject, Object.assign(new Error('cancelado'), { name: 'AbortError' }));
   });
+  return { promise, cancel: () => cancel() };
 }
 
 export async function fromOverpass(category, center, radius) {
@@ -99,7 +101,9 @@ export async function fromOverpass(category, center, radius) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.items;
   inflight?.cancel();
-  const data = await hedgedFetch(buildQuery(category, center, radius));
+  const req = hedgedFetch(buildQuery(category, center, radius));
+  inflight = req;
+  const data = await req.promise;
   const items = (data.elements || []).map((e) => {
     const lat = e.lat ?? e.center?.lat;
     const lng = e.lon ?? e.center?.lon;
@@ -111,6 +115,7 @@ export async function fromOverpass(category, center, radius) {
       name: t['name:pt'] || t.name || t.brand || kindOf(t, category.kind),
       kind: kindOf(t, category.kind),
       address: [street, t['addr:suburb']].filter(Boolean).join(' · '),
+      hasStreet: !!street,
       lng, lat,
       dist: distance([center.lng, center.lat], [lng, lat]),
       unnamed: !(t.name || t.brand), source: 'osm',

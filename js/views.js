@@ -4,11 +4,12 @@ import { icon } from './icons.js';
 import { CONFIG } from './config.js';
 import { fmtDistance, fmtDuration, fmtArrival, fmtCoords } from './format.js';
 import { cleanSteps } from './routing.js';
+import { openStatus, formatRanges, DAY_LABELS, todayIndex } from './hours.js';
 
 const h = (html) => ({ html });
 
 // ---------------- Lugar ----------------
-export function placeView(place, { info, saved, onClose, onDirections, onSave, onShare }) {
+export function placeView(place, { info, details, saved, onClose, onDirections, onSave, onShare, onCopy }) {
   const stat = (v, unit, label) => el('div', { class: 'stat' },
     el('div', { class: 'stat-v' }, v, unit ? el('small', {}, ` ${unit}`) : null),
     el('div', { class: 'stat-l' }, label));
@@ -23,19 +24,106 @@ export function placeView(place, { info, saved, onClose, onDirections, onSave, o
     stats = [stat('—', '', 'de carro'), stat('—', '', 'distância'), stat('—', '', info?.reason || 'ative a localização')];
   }
 
+  const d = details && !details.loading ? details : null;
+  const name = (d?.name && (place.name === place.kind || place.name === 'Ponto marcado')) ? d.name : place.name;
+  const kind = d?.kind || place.kind || 'Local';
+  const eyebrow = [kind, d?.brand].filter(Boolean).join(' · ');
+  const address = d?.address || place.address;
+  const status = d?.hours?.parsed ? openStatus(d.hours.parsed) : null;
+
+  const head = el('div', { class: 'place-head' },
+    el('div', { style: 'min-width:0' },
+      el('div', { class: 'eyebrow' }, eyebrow),
+      el('h1', { class: 'place-title' }, name),
+      status ? el('div', { class: 'open-line' },
+        el('span', { class: `open-dot ${status.open ? (status.soon ? 'soon' : 'ok') : 'bad'}` }),
+        el('strong', { class: status.open ? (status.soon ? 'soon' : 'ok') : 'bad' }, status.open ? 'Aberto' : 'Fechado'),
+        el('span', {}, ` · ${status.text.replace(/^Aberto 24 horas$/, '24 horas')}`)) : null,
+      el('p', { class: 'place-sub' },
+        address || (place.loading || details?.loading ? 'Buscando endereço…' : fmtCoords(place.lng, place.lat)))),
+    el('button', { class: 'close-btn', 'aria-label': 'Fechar', onclick: onClose, ...h(icon('close')) }));
+
   return el('div', { class: 'place' },
-    el('div', { class: 'place-head' },
-      el('div', { style: 'min-width:0' },
-        el('div', { class: 'eyebrow' }, place.kind || 'Local'),
-        el('h1', { class: 'place-title' }, place.name),
-        el('p', { class: 'place-sub' }, place.loading ? 'Buscando endereço…' : (place.address || fmtCoords(place.lng, place.lat)))),
-      el('button', { class: 'close-btn', 'aria-label': 'Fechar', onclick: onClose, ...h(icon('close')) })),
+    head,
     el('div', { class: 'stats' }, stats),
     el('div', { class: 'actions', 'data-peek-end': true },
       el('button', { class: 'btn primary', onclick: onDirections, ...h(`${icon('directions')}<span>Rotas</span>`) }),
       el('button', { class: 'btn square', 'aria-label': saved ? 'Remover dos salvos' : 'Salvar', 'aria-pressed': String(!!saved), onclick: onSave, ...h(icon('bookmark')) }),
       el('button', { class: 'btn square', 'aria-label': 'Compartilhar', onclick: onShare, ...h(icon('share')) })),
-    el('div', { class: 'meta-line' }, fmtCoords(place.lng, place.lat)));
+    detailsSection(place, details, { address, onCopy }));
+}
+
+function infoRow(ico, main, sub, extra) {
+  return el('div', { class: 'info-row' },
+    el('span', { class: 'info-ico', ...h(icon(ico)) }),
+    el('div', { class: 'info-main' }, main, sub ? el('div', { class: 'info-sub' }, sub) : null),
+    extra || null);
+}
+
+const ext = (href, text) => el('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
+
+function detailsSection(place, details, { address, onCopy }) {
+  const wrap = el('div', { class: 'details' });
+  if (!details || details.loading) {
+    wrap.append(el('div', { class: 'loading' }, el('span', { class: 'spinner' }), 'Carregando informações…'));
+    return wrap;
+  }
+  const d = details;
+  const rows = [];
+
+  if (d.hours) {
+    if (d.hours.parsed) {
+      const st = openStatus(d.hours.parsed);
+      const today = todayIndex();
+      const table = el('table', { class: 'hours-table' },
+        DAY_LABELS.map((label, i) => el('tr', { class: i === today ? 'today' : '' },
+          el('td', {}, label), el('td', {}, formatRanges(d.hours.parsed.week[i])))));
+      rows.push(el('details', { class: 'info-row hours' },
+        el('summary', {},
+          el('span', { class: 'info-ico', ...h(icon('clock')) }),
+          el('div', { class: 'info-main' },
+            el('span', { class: st.open ? (st.soon ? 'soon' : 'ok') : 'bad' }, st.open ? 'Aberto' : 'Fechado'),
+            ` · ${st.text}`,
+            el('div', { class: 'info-sub' }, `Hoje: ${formatRanges(d.hours.parsed.week[today])}`)),
+          el('span', { class: 'info-chev', ...h(icon('chevron')) })),
+        table));
+    } else {
+      rows.push(infoRow('clock', 'Horário', d.hours.raw));
+    }
+  }
+
+  if (address) {
+    rows.push(infoRow('pin', address, d.level ? `Andar ${d.level}` : null,
+      el('button', { class: 'icon-btn', 'aria-label': 'Copiar endereço', onclick: () => onCopy(address), ...h(icon('copy')) })));
+  }
+  if (d.phone) rows.push(infoRow('phone', el('a', { href: `tel:${d.phone.replace(/[^\d+]/g, '')}` }, d.phone)));
+  if (d.whatsapp) rows.push(infoRow('chat', ext(`https://wa.me/${d.whatsapp}`, 'WhatsApp')));
+  if (d.website) rows.push(infoRow('globe', ext(d.website, d.website.replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, ''))));
+  if (d.instagram) rows.push(infoRow('instagram', ext(d.instagram.url, d.instagram.label)));
+  if (d.facebook) rows.push(infoRow('facebook', ext(d.facebook.url, d.facebook.label)));
+  if (d.email) rows.push(infoRow('mail', el('a', { href: `mailto:${d.email}` }, d.email)));
+
+  if (rows.length) wrap.append(el('div', { class: 'info-list' }, rows));
+
+  const chips = [...d.cuisine, ...d.fuels, ...d.features];
+  if (chips.length) {
+    wrap.append(el('div', { class: 'section-title' }, d.fuels.length ? 'Combustíveis e serviços' : 'Sobre o lugar'));
+    wrap.append(el('div', { class: 'feature-chips' }, chips.map((c) => el('span', { class: 'feature-chip' }, c))));
+  }
+  if (d.description) wrap.append(el('p', { class: 'hint' }, d.description));
+
+  if (!d.hours && !d.phone && !d.website && !d.instagram && !d.whatsapp) {
+    wrap.append(el('p', { class: 'hint' }, d.lookupFailed
+      ? 'Não consegui carregar as informações agora.'
+      : 'Ainda não há horário ou contato cadastrados para este lugar.'));
+  }
+
+  const editUrl = d.osm?.editUrl || `https://www.openstreetmap.org/note/new#map=19/${place.lat.toFixed(6)}/${place.lng.toFixed(6)}`;
+  wrap.append(el('div', { class: 'source-line' },
+    el('span', {}, 'Dados: OpenStreetMap'),
+    el('a', { href: editUrl, target: '_blank', rel: 'noopener noreferrer', ...h(`${icon('edit')}<span>${d.osm ? 'Sugerir edição' : 'Adicionar informações'}</span>`) })));
+  wrap.append(el('div', { class: 'meta-line' }, fmtCoords(place.lng, place.lat)));
+  return wrap;
 }
 
 function splitDuration(s) {
