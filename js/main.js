@@ -5,7 +5,7 @@ import { icon } from './icons.js';
 import * as M from './map.js';
 import { reverse } from './geocoder.js';
 import { getRoutes } from './routing.js';
-import { nearby } from './places.js';
+import { fromTiles, fromOverpass, mergePlaces, cancelNearby } from './places.js';
 import { startLocation } from './location.js';
 import { startCompass, requestCompass, compassActive } from './compass.js';
 import { startNav, stopNav, isNavigating } from './nav.js';
@@ -131,37 +131,75 @@ async function loadPlaceInfo(place) {
 // ----- Lista por categoria -----
 const listState = { category: null, items: [], loading: false, error: null };
 
+let catToken = 0;
+
+function waitMapIdle(ms = 2500) {
+  return new Promise((resolve) => {
+    const t = setTimeout(resolve, ms);
+    M.map.once('idle', () => { clearTimeout(t); resolve(); });
+  });
+}
+
 async function openCategory(cat) {
-  if (listState.category?.id === cat.id && state.view === 'list') { listState.category = null; showIdle(); return; }
+  if (listState.category?.id === cat.id && state.view === 'list') { listState.category = null; cancelNearby(); showIdle(); return; }
   const center = state.userPosition || (M.map.getZoom() > 11 ? M.map.getCenter() : null);
   if (!center) { toast('Aproxime o mapa ou ative a localização para buscar por perto.'); return; }
+  const token = ++catToken;
+  const c = { lng: center.lng, lat: center.lat };
   Object.assign(listState, { category: cat, items: [], loading: true, error: null });
   markChip(cat.id);
   showList();
-  try {
-    listState.items = await nearby(cat, { lng: center.lng, lat: center.lat });
-    listState.loading = false;
-    if (listState.category?.id !== cat.id) return;
+
+  const alive = () => token === catToken && listState.category?.id === cat.id;
+  const update = (items) => {
+    if (!alive()) return;
+    listState.items = mergePlaces(listState.items, items);
     M.drawPois(listState.items);
-    if (listState.items.length) M.fitCoords([[center.lng, center.lat], ...listState.items.slice(0, 12).map((p) => [p.lng, p.lat])]);
-  } catch (err) {
-    if (err.name === 'AbortError') return;
-    listState.loading = false;
+    if (state.view === 'list') showList({ keepSheet: true });
+  };
+
+  // 1) Instantâneo: pontos que já estão nos blocos do mapa (precisa de zoom de rua)
+  const needZoom = M.map.getZoom() < 14.5;
+  if (needZoom) M.map.flyTo({ center: [c.lng, c.lat], zoom: 15, padding: M.viewPadding(), duration: 600 });
+  const tiles = (needZoom ? waitMapIdle() : Promise.resolve())
+    .then(() => update(fromTiles(M.map, cat, c, CONFIG.categoryRadius)));
+
+  // 2) Completo: OpenStreetMap via Overpass (amplia o raio se vier pouca coisa)
+  const osm = (async () => {
+    let items = await fromOverpass(cat, c, CONFIG.categoryRadius);
+    update(items);
+    if (alive() && listState.items.length < CONFIG.categoryMinResults) {
+      items = await fromOverpass(cat, c, CONFIG.categoryRadiusMax);
+      update(items);
+    }
+  })();
+
+  const [, r2] = await Promise.allSettled([tiles, osm]);
+  if (!alive()) return;
+  listState.loading = false;
+  if (r2.status === 'rejected' && r2.reason?.name !== 'AbortError' && !listState.items.length) {
     listState.error = 'Não consegui buscar agora. Tente de novo em instantes.';
+  } else if (r2.status === 'rejected' && r2.reason?.name !== 'AbortError') {
+    toast('Mostrando só os resultados do mapa: a busca completa não respondeu.');
   }
-  if (state.view === 'list') showList();
+  if (state.view === 'list') showList({ keepSheet: true });
+  if (listState.items.length) {
+    M.fitCoords([[c.lng, c.lat], ...listState.items.slice(0, 10).map((p) => [p.lng, p.lat])], { maxZoom: 16 });
+  }
 }
 
-function showList() {
+function showList({ keepSheet = false } = {}) {
   state.view = 'list';
   setMode('list');
   M.setMarker('place', null);
   M.drawPois(listState.items);
-  mount(poiListView({
+  const node = poiListView({
     category: listState.category, items: listState.items, loading: listState.loading, error: listState.error,
     onPick: (p) => { addRecent(p); setSearchText(p.name); showPlace(p, { fly: true }); },
-    onClose: () => { listState.category = null; showIdle(); },
-  }), 'half');
+    onClose: () => { listState.category = null; cancelNearby(); showIdle(); },
+  });
+  if (keepSheet) body.replaceChildren(node);
+  else mount(node, 'half');
 }
 
 // ----- Rotas -----

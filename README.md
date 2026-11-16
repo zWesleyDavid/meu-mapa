@@ -25,7 +25,7 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 - Mapa com estilo próprio nos dois temas: nomes de ruas e avenidas mais cedo e maiores, mais pontos de interesse e números das casas em zoom alto (`js/mapstyle.js`)
 - Sua localização com **cone de direção** (bússola do celular; no iPhone a permissão é pedida ao tocar no botão de localização)
 - Busca com autocompletar, salvos e recentes
-- Categorias rápidas (Comida, Café, Combustível, Farmácia) num raio de 2 km
+- Categorias rápidas (Comida, Café, Combustível, Farmácia): resultados instantâneos dos pontos do próprio mapa + busca completa no OpenStreetMap (várias etiquetas por categoria, servidores reserva, raio ampliado para 5 km se vier pouca coisa, cache de 5 min)
 - Card do lugar com tempo de carro, distância e horário de chegada
 - Toque longo (ou clique direito): "Rotas até aqui", "Sair daqui", "O que tem aqui?"
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português

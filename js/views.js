@@ -48,22 +48,24 @@ function splitDuration(s) {
 export function poiListView({ category, items, loading, error, onPick, onClose }) {
   const head = el('div', { class: 'list-head' },
     el('div', {},
-      el('div', { class: 'eyebrow' }, 'Perto de você'),
+      el('div', { class: 'eyebrow' }, items.length ? `Perto de você · ${items.length}` : 'Perto de você'),
       el('h2', { class: 'list-title' }, category.label)),
     el('button', { class: 'close-btn', 'aria-label': 'Fechar', onclick: onClose, ...h(icon('close')) }));
   head.setAttribute('data-peek-end', '');
   const wrap = el('div', {}, head);
-  if (loading) wrap.append(el('div', { class: 'loading' }, el('span', { class: 'spinner' }), 'Procurando…'));
-  else if (error) wrap.append(el('div', { class: 'error' }, error));
-  else if (!items.length) wrap.append(el('p', { class: 'hint' }, 'Nada encontrado num raio de 2 km.'));
-  else {
+  if (items.length) {
     wrap.append(el('ul', { class: 'poi-list' }, items.map((p) =>
       el('li', {}, el('button', { onclick: () => onPick(p) },
         el('div', { style: 'min-width:0' },
           el('div', { class: 'p-name' }, p.name),
-          p.address ? el('div', { class: 'p-sub' }, p.address) : null),
+          (p.kind !== category.kind || p.address)
+            ? el('div', { class: 'p-sub' }, [p.kind !== category.kind ? p.kind : null, p.address].filter(Boolean).join(' · '))
+            : null),
         el('span', { class: 'p-dist' }, fmtDistance(p.dist)))))));
   }
+  if (loading) wrap.append(el('div', { class: 'loading' }, el('span', { class: 'spinner' }), items.length ? 'Buscando mais lugares…' : 'Procurando…'));
+  else if (error) wrap.append(el('div', { class: 'error' }, error));
+  else if (!items.length) wrap.append(el('p', { class: 'hint' }, 'Nada encontrado por perto.'));
   return wrap;
 }
 

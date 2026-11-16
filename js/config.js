@@ -31,15 +31,33 @@ export const CONFIG = {
     defaultProfile: 'car',
   },
 
-  // Categorias rápidas (busca de pontos próximos via Overpass / OpenStreetMap).
-  overpass: 'https://overpass-api.de/api/interpreter',
-  categories: [
-    { id: 'food',     label: 'Comida',      icon: 'food',     kind: 'Restaurante', filter: '["amenity"~"^(restaurant|fast_food)$"]' },
-    { id: 'cafe',     label: 'Café',        icon: 'cafe',     kind: 'Café',        filter: '["amenity"="cafe"]' },
-    { id: 'fuel',     label: 'Combustível', icon: 'fuel',     kind: 'Posto',       filter: '["amenity"="fuel"]' },
-    { id: 'pharmacy', label: 'Farmácia',    icon: 'pharmacy', kind: 'Farmácia',    filter: '["amenity"="pharmacy"]' },
+  // Categorias rápidas. Duas fontes, combinadas:
+  //  1) os pontos que já vieram nos blocos do mapa (instantâneo, sem rede extra)
+  //  2) Overpass / OpenStreetMap (completo), com servidores reserva se o primeiro demorar
+  overpass: [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   ],
-  categoryRadius: 2000,
+  overpassHedgeMs: 2500,   // espera antes de tentar o próximo servidor
+  overpassTimeoutMs: 12000,
+  categories: [
+    { id: 'food', label: 'Comida', icon: 'food', kind: 'Restaurante',
+      tags: ['["amenity"~"^(restaurant|fast_food|food_court)$"]'],
+      tileClasses: ['restaurant', 'fast_food', 'food_court'] },
+    { id: 'cafe', label: 'Café', icon: 'cafe', kind: 'Café',
+      tags: ['["amenity"="cafe"]', '["shop"~"^(coffee|bakery|pastry)$"]'],
+      tileClasses: ['cafe', 'bakery', 'coffee', 'pastry'] },
+    { id: 'fuel', label: 'Combustível', icon: 'fuel', kind: 'Posto',
+      tags: ['["amenity"="fuel"]'],
+      tileClasses: ['fuel'] },
+    { id: 'pharmacy', label: 'Farmácia', icon: 'pharmacy', kind: 'Farmácia',
+      tags: ['["amenity"="pharmacy"]', '["shop"="chemist"]', '["healthcare"="pharmacy"]'],
+      tileClasses: ['pharmacy', 'chemist'] },
+  ],
+  categoryRadius: 2000,      // raio inicial
+  categoryRadiusMax: 5000,   // amplia se vier pouca coisa
+  categoryMinResults: 8,
 
   // Navegação
   nav: {
