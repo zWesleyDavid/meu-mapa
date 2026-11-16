@@ -22,13 +22,15 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 ## O que já faz
 - Visual próprio: tema escuro (limão) e claro (azul-marinho + coral), seguindo o sistema ou pelo botão
 - Topo em estilo de sinalização de trânsito nas rotas e na navegação
-- Sua localização (GPS próprio), busca com autocompletar, salvos e recentes
+- Mapa com estilo próprio nos dois temas: nomes de ruas e avenidas mais cedo e maiores, mais pontos de interesse e números das casas em zoom alto (`js/mapstyle.js`)
+- Sua localização com **cone de direção** (bússola do celular; no iPhone a permissão é pedida ao tocar no botão de localização)
+- Busca com autocompletar, salvos e recentes
 - Categorias rápidas (Comida, Café, Combustível, Farmácia) num raio de 2 km
 - Card do lugar com tempo de carro, distância e horário de chegada
 - Toque longo (ou clique direito): "Rotas até aqui", "Sair daqui", "O que tem aqui?"
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português
 - **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
-  tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
+  trecho já percorrido em cinza, tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
@@ -49,6 +51,8 @@ js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálcu
 js/geo.js             geometria: distâncias, projeção na rota
 js/location.js        GPS do usuário
 js/places.js          categorias próximas (Overpass)
+js/mapstyle.js        estilo do mapa (cores, densidade de nomes, números)
+js/compass.js         bússola do aparelho
 js/search-ui.js       caixa de busca, recentes, teclado
 js/views.js           renderização das telas do painel
 js/main.js            controlador: liga tudo
@@ -64,8 +68,7 @@ No console: `meuMapa.state`, `meuMapa.map()`, `meuMapa.bus`.
 ## Provedores (todos gratuitos, com uso justo)
 | Função | Serviço | Observação |
 |---|---|---|
-| Mapa claro | OpenFreeMap (`liberty`) | Sem limite declarado, sem chave |
-| Mapa escuro | CARTO Dark Matter | Grátis para uso não comercial |
+| Mapa (claro e escuro) | OpenFreeMap (base `liberty`, recolorida) | Sem limite declarado, sem chave |
 | Busca | Photon (Komoot) | Não usar para tráfego pesado |
 | Categorias | Overpass API | Uso justo, sem chave |
 | Rotas | OSRM da FOSSGIS (routing.openstreetmap.de) | Servidor de demonstração; para escala, subir o próprio |

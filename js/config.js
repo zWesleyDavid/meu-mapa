@@ -5,10 +5,10 @@ export const CONFIG = {
   // Vista inicial antes de achar sua localização (Brasil inteiro).
   initialView: { center: [-51.9, -14.2], zoom: 3.6 },
 
-  // Estilos do mapa (vetoriais, sem chave de API).
+  // Estilo do mapa: base vetorial do OpenFreeMap (sem chave). As cores e a densidade de
+  // nomes de ruas/pontos são ajustadas em js/mapstyle.js para os dois temas.
   styles: {
-    light: 'https://tiles.openfreemap.org/styles/liberty',
-    dark: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    base: 'https://tiles.openfreemap.org/styles/liberty',
   },
 
   // Busca de endereços (Photon / Komoot, baseado no OpenStreetMap).

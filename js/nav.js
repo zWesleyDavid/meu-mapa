@@ -183,6 +183,7 @@ function onPosition(pos) {
   nav.lastPos = { lngLat: shown, bearing: heading, speed: pos.speed };
 
   M.setPuck(shown, heading);
+  if (onRoute) M.drawNavProgress(nav.prep.coords, s.idx, s.point);
   if (nav.following) camera(nav.lastPos);
   render(progress, pos.speed);
 

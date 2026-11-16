@@ -1,7 +1,7 @@
 // Tudo que toca o MapLibre fica aqui.
 import { CONFIG } from './config.js';
 import { bus } from './core.js';
-import { icon } from './icons.js';
+import { buildStyle, placeholderStyle } from './mapstyle.js';
 
 /* global maplibregl */
 export let map;
@@ -13,7 +13,7 @@ let routeLabels = [];
 export function initMap(theme) {
   map = new maplibregl.Map({
     container: 'map',
-    style: CONFIG.styles[theme],
+    style: placeholderStyle(theme),
     center: CONFIG.initialView.center,
     zoom: CONFIG.initialView.zoom,
     attributionControl: { compact: true },
@@ -23,14 +23,24 @@ export function initMap(theme) {
 
   map.on('style.load', addLayers);
   map.on('load', () => bus.emit('map:ready', map));
+  setTheme(theme);
   map.on('rotate', () => bus.emit('map:rotate', map.getBearing()));
   setupPointerGestures();
   return map;
 }
 
-export function setTheme(theme) {
+let styleToken = 0;
+export async function setTheme(theme) {
   if (!map) return;
-  map.setStyle(CONFIG.styles[theme], { diff: false });
+  const token = ++styleToken;
+  try {
+    const style = await buildStyle(theme);
+    if (token !== styleToken) return;
+    map.setStyle(style, { diff: false });
+  } catch (err) {
+    console.warn('Estilo próprio indisponível, usando o original', err);
+    if (token === styleToken) map.setStyle(CONFIG.styles.base, { diff: false });
+  }
 }
 
 function cssVar(name, fallback = '#1a73e8') {
@@ -53,6 +63,17 @@ function addLayers() {
     id: 'route-alt', type: 'line', source: 'routes', filter: ['==', ['get', 'selected'], false],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': cssVar('--route-alt'), 'line-width': width(3.5, 8) },
+  });
+  // Trecho já percorrido na navegação
+  map.addLayer({
+    id: 'route-done-casing', type: 'line', source: 'routes', filter: ['==', ['get', 'selected'], 'done'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': cssVar('--route-casing'), 'line-width': width(7, 14) },
+  });
+  map.addLayer({
+    id: 'route-done', type: 'line', source: 'routes', filter: ['==', ['get', 'selected'], 'done'],
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': cssVar('--route-done', '#8a94a3'), 'line-width': width(4.5, 9) },
   });
   map.addLayer({
     id: 'route-casing', type: 'line', source: 'routes', filter: ['==', ['get', 'selected'], true],
@@ -108,6 +129,17 @@ export function drawRoutes(routes, selected, { labels = true } = {}) {
 
 export function clearRoutes() { drawRoutes([], 0); }
 
+/** Navegação: pinta de cinza o que já foi percorrido e mantém o restante em destaque. */
+export function drawNavProgress(coords, idx, point) {
+  const done = coords.slice(0, idx + 1).concat([point]);
+  const rest = [point].concat(coords.slice(idx + 1));
+  const feats = [];
+  if (done.length >= 2) feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: done }, properties: { selected: 'done' } });
+  if (rest.length >= 2) feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: rest }, properties: { idx: 0, selected: true } });
+  routeData = { type: 'FeatureCollection', features: feats };
+  map.getSource('routes')?.setData(routeData);
+}
+
 export function drawPois(places) {
   poiData = {
     type: 'FeatureCollection',
@@ -129,8 +161,20 @@ export function setMarker(kind, place) {
 
 export function setUserDot(pos) {
   if (!pos) return;
-  if (!markers.user) markers.user = new maplibregl.Marker({ element: div('user-dot') }).setLngLat([pos.lng, pos.lat]).addTo(map);
-  else markers.user.setLngLat([pos.lng, pos.lat]);
+  if (!markers.user) {
+    const wrap = div('user-loc');
+    wrap.append(div('user-cone'), div('user-dot'));
+    markers.user = new maplibregl.Marker({ element: wrap, rotationAlignment: 'map', pitchAlignment: 'map' })
+      .setLngLat([pos.lng, pos.lat]).addTo(map);
+  } else markers.user.setLngLat([pos.lng, pos.lat]);
+}
+
+/** Direção para onde o celular aponta (graus a partir do norte) ou null para esconder o cone. */
+export function setUserHeading(deg) {
+  if (!markers.user) return;
+  const e = markers.user.getElement();
+  e.classList.toggle('has-heading', deg != null);
+  if (deg != null) markers.user.setRotation(deg);
 }
 
 export function setPuck(lngLat, bearingDeg) {

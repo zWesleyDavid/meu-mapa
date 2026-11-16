@@ -7,6 +7,7 @@ import { reverse } from './geocoder.js';
 import { getRoutes } from './routing.js';
 import { nearby } from './places.js';
 import { startLocation } from './location.js';
+import { startCompass, requestCompass, compassActive } from './compass.js';
 import { startNav, stopNav, isNavigating } from './nav.js';
 import { fmtDuration } from './format.js';
 import { setSheet, measurePeek } from './sheet.js';
@@ -317,6 +318,8 @@ bus.on('search:cleared', () => { if (state.view === 'place') showIdle(); });
 let flyOnFix = true;
 bus.on('position', ({ position, first }) => {
   M.setUserDot(position);
+  // Sem bússola: usa a direção do GPS quando estiver em movimento.
+  if (!compassActive()) M.setUserHeading(position.speed > 1 && position.heading != null ? position.heading : null);
   if (first && flyOnFix && state.view === 'idle' && !isNavigating()) {
     M.map.flyTo({ center: [position.lng, position.lat], zoom: 15, duration: 1200 });
   }
@@ -337,7 +340,10 @@ bus.on('position:error', (e) => {
 });
 
 // Botões do mapa
+bus.on('heading', (deg) => M.setUserHeading(deg));
+
 $('#btn-locate').addEventListener('click', () => {
+  requestCompass(); // iPhone pede permissão da bússola aqui (precisa de um toque)
   if (state.userPosition) M.map.flyTo({ center: [state.userPosition.lng, state.userPosition.lat], zoom: Math.max(M.map.getZoom(), 16), padding: M.viewPadding(), duration: 800 });
   else { flyOnFix = true; startLocation(); toast('Procurando sua localização…'); }
 });
@@ -441,7 +447,7 @@ async function sharePlace(place) {
 showIdle();
 
 bus.on('map:ready', () => {
-  if (window.isSecureContext) startLocation();
+  if (window.isSecureContext) { startLocation(); startCompass(); }
   if (!store.get('hintShown', false)) {
     store.set('hintShown', true);
     setTimeout(() => toast('Dica: segure o dedo no mapa para traçar uma rota até ali.', 4500), 1500);
