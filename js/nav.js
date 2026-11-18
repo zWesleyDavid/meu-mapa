@@ -8,6 +8,7 @@ import { getRoutes } from './routing.js';
 import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
 import { pauseLocationEvents } from './location.js';
+import { analyzeLanes, isComplex, laneIcon, junctionSVG } from './junction.js';
 
 const root = $('#nav');
 const SKIP = new Set(['new name', 'notification']);
@@ -70,11 +71,13 @@ function buildUI() {
   ui.icon = el('span', { html: icon('straight') });
   ui.street = el('div', { class: 'nav-street' }, '—');
   ui.dist = el('div', { class: 'nav-dist' }, '');
-  ui.sign = el('div', { class: 'nav-sign' }, el('div', { class: 'nav-sign-inner' }, ui.icon, el('div', { style: 'min-width:0;flex:1' }, ui.street, ui.dist)));
+  ui.sign = el('div', { class: 'nav-sign' }, el('div', { class: 'nav-sign-inner' }, ui.icon, el('div', { class: 'nav-text' }, ui.street, ui.dist)));
+  ui.lanes = el('div', { class: 'nav-lanes', hidden: true });
+  ui.junction = el('div', { class: 'nav-junction', hidden: true });
   ui.stripIcon = el('span', { html: icon('left') });
   ui.stripText = el('span', { class: 'txt' }, '');
   ui.strip = el('div', { class: 'nav-strip' }, el('span', { class: 'lbl' }, 'Depois'), ui.stripIcon, ui.stripText);
-  ui.top = el('div', { class: 'nav-top' }, ui.sign, ui.strip);
+  ui.top = el('div', { class: 'nav-top' }, ui.sign, ui.junction, ui.lanes, ui.strip);
 
   ui.muteBtn = el('button', { class: 'fab', onclick: toggleMute });
   ui.overviewBtn = el('button', { class: 'fab', 'aria-label': 'Ver rota inteira', html: icon('overview'), onclick: overview });
@@ -184,17 +187,35 @@ function onPosition(pos) {
 
   M.setPuck(shown, heading);
   if (onRoute) M.drawNavProgress(nav.prep.coords, s.idx, s.point);
-  if (nav.following) camera(nav.lastPos);
   render(progress, pos.speed);
+  if (nav.following) camera(nav.lastPos);
 
   const remaining = nav.prep.total - progress;
   if (remaining <= CONFIG.nav.arriveMeters || distance(p, [nav.destination.lng, nav.destination.lat]) <= CONFIG.nav.arriveMeters) arrive();
 }
 
-function camera({ lngLat, bearing: b, speed }) {
+// ---------------- Zoom dinâmico ----------------
+// Zoom e inclinação dependem da velocidade e da distância até a próxima manobra.
+// A mudança por leitura é limitada, para a câmera "respirar" em vez de pular.
+function targetCamera(speed, d, junction) {
   const kmh = (speed || 0) * 3.6;
-  const zoom = kmh > 80 ? 15.5 : kmh > 45 ? 16.3 : 17;
-  M.followCamera(lngLat, b, zoom);
+  let zoom = kmh > 90 ? 15 : kmh > 60 ? 15.5 : kmh > 35 ? 16.2 : 16.9;
+  let pitch = kmh > 60 ? 45 : 50;
+  if (d != null && d < 700) {
+    const f = Math.max(0, Math.min(1, (700 - d) / 500)); // 0 a 700 m → 1 a 200 m
+    zoom += (17.6 - zoom) * f;
+    pitch += (58 - pitch) * f;
+  }
+  if (junction) { zoom = Math.max(zoom, 17.4); pitch = 58; }
+  return { zoom, pitch };
+}
+
+function camera({ lngLat, bearing: b }) {
+  const t = nav.camTarget || { zoom: 16.5, pitch: CONFIG.nav.pitch };
+  const cur = nav.cam || t;
+  const step = (from, to, max) => from + Math.max(-max, Math.min(max, to - from));
+  nav.cam = { zoom: step(cur.zoom, t.zoom, 0.35), pitch: step(cur.pitch, t.pitch, 3) };
+  M.followCamera(lngLat, b, nav.cam.zoom, nav.cam.pitch);
 }
 
 function render(progress, speed) {
@@ -202,24 +223,60 @@ function render(progress, speed) {
   const after = nextStep(progress, 1);
   const remaining = Math.max(0, nav.prep.total - progress);
   const remainingTime = nav.prep.duration * (remaining / (nav.prep.total || 1));
+  const v = Math.max(speed || 0, 5);
+  let d = null;
+  let showJunction = false;
+  let showLanes = false;
+  let lanes = null;
 
   if (step) {
-    const d = step.at - progress;
+    d = step.at - progress;
     ui.icon.innerHTML = icon(step.icon);
     ui.street.textContent = step.type === 'arrive' ? (nav.destination.name || 'Destino') : (step.name || step.short);
     ui.street.classList.toggle('long', ui.street.textContent.length > 16);
     ui.dist.textContent = fmtDistance(d).toUpperCase();
-    voice(step, d, speed);
+    lanes = analyzeLanes(step);
+    showJunction = !!lanes && isComplex(lanes, step, after) && d > 12 && d < Math.max(320, v * 22);
+    showLanes = !!lanes && !showJunction && d > 12 && d < Math.max(800, v * 45);
+    voice(step, d, speed, lanes);
   }
-  if (after) {
+
+  // Visão 2D da junção (perto de pontos confusos)
+  ui.sign.classList.toggle('compact', showJunction);
+  if (showJunction) {
+    if (ui.junction.dataset.key !== `${step.at}`) {
+      ui.junction.dataset.key = `${step.at}`;
+      ui.junction.innerHTML = `${junctionSVG(lanes, step)}<div class="j-foot"><span>${lanes.hint}</span><span class="j-mini">${
+        lanes.lanes.map((l) => `<i class="${l.valid ? 'on' : ''}">${laneIcon(l.glyph)}</i>`).join('')}</span></div>`;
+      if (!nav.junctionSpoken?.has(step.at)) { (nav.junctionSpoken ||= new Set()).add(step.at); say(lanes.hint, `${step.at}:lanes`); }
+    }
+    ui.junction.hidden = false;
+  } else ui.junction.hidden = true;
+
+  // Barra de faixas (antes, a até ~800 m)
+  if (showLanes) {
+    if (ui.lanes.dataset.key !== `${step.at}`) {
+      ui.lanes.dataset.key = `${step.at}`;
+      ui.lanes.innerHTML = `<div class="lane-cells" role="img" aria-label="${lanes.hint}">${
+        lanes.lanes.map((l) => `<span class="lane-cell${l.valid ? ' on' : ''}">${laneIcon(l.glyph)}</span>`).join('')}</div><span class="lane-label">${lanes.hint.replace(/^Use (as |a )?/, '')}</span>`;
+    }
+    ui.lanes.hidden = false;
+  } else ui.lanes.hidden = true;
+
+  if (after && !showJunction) {
     ui.strip.hidden = false;
-    ui.sign.classList.remove('alone');
     ui.stripIcon.innerHTML = icon(after.icon);
     ui.stripText.textContent = after.type === 'arrive' ? 'Destino' : (after.name || after.short);
   } else {
     ui.strip.hidden = true;
-    ui.sign.classList.add('alone');
   }
+  const lastVisible = [ui.strip, ui.lanes, ui.junction].some((x) => !x.hidden);
+  ui.sign.classList.toggle('alone', !lastVisible);
+  ui.top.classList.toggle('with-junction', showJunction);
+  const h = ui.top.offsetHeight;
+  if (h && h !== nav.topH) { nav.topH = h; document.documentElement.style.setProperty('--nav-top-h', `${h}px`); }
+
+  nav.camTarget = targetCamera(speed, d, showJunction);
   ui.etaMain.textContent = fmtDuration(remainingTime);
   ui.etaSub.textContent = `${fmtDistance(remaining)} · chegada ${fmtArrival(remainingTime)}`;
   ui.speedVal.textContent = speed != null && speed >= 0 ? Math.round(speed * 3.6) : '–';
@@ -284,14 +341,17 @@ function roundForVoice(m) {
   return `${Math.round(m / 50) * 50 || 50} metros`;
 }
 
-function voice(step, d, speed) {
+function voice(step, d, speed, lanes) {
   const id = `${step.at.toFixed(0)}`;
   const v = Math.max(speed || 0, 5);
   const far = Math.max(250, Math.min(800, v * 25));
   const near = Math.max(40, v * 5);
   const lower = step.text.charAt(0).toLowerCase() + step.text.slice(1);
   if (d <= near) say(step.text, `${id}:near`);
-  else if (d <= far && d > near * 2) say(`Em ${roundForVoice(d)}, ${lower}`, `${id}:far`);
+  else if (d <= far && d > near * 2) {
+    const hint = lanes ? `. ${lanes.hint}` : '';
+    say(`Em ${roundForVoice(d)}, ${lower}${hint}`, `${id}:far`);
+  }
 }
 
 // ---------------- Tela sempre ligada ----------------

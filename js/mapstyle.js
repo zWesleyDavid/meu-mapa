@@ -139,6 +139,10 @@ export async function buildStyle(theme) {
             l.layout['icon-image'] = `mm-${theme}-shield`;
             l.layout['icon-text-fit'] = 'both';
             l.layout['icon-text-fit-padding'] = [2, 4, 2, 4];
+            // menos repetição ao longo da via (antes aparecia um escudo a cada quarteirão)
+            l.layout['symbol-spacing'] = 600;
+            l.layout['symbol-avoid-edges'] = true;
+            l.minzoom = Math.max(l.minzoom ?? 0, 9);
             if (boldFont) l.layout['text-font'] = boldFont;
             setPaint(l, 'text-color', SHIELD_TEXT[theme]);
             setPaint(l, 'text-halo-width', 0);

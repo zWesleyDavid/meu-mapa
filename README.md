@@ -31,7 +31,8 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 - Toque longo (ou clique direito): "Rotas até aqui", "Sair daqui", "O que tem aqui?"
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português
 - **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
-  trecho já percorrido em cinza, tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
+  trecho já percorrido em cinza, **zoom dinâmico** (afasta na rodovia, aproxima perto das manobras),
+  **faixas** (barra a até ~800 m e **visão 2D da junção** em pontos confusos, a partir dos dados de faixa do OSM), tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
@@ -48,7 +49,8 @@ js/map.js             tudo que toca o MapLibre (camadas, marcadores, câmera, ge
 js/geocoder.js        busca/geocodificação reversa (Photon) → formato Place
 js/routing.js         rotas (OSRM) + gerador de instruções em pt-BR
 js/sheet.js           bottom sheet arrastável
-js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálculo)
+js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálculo, zoom dinâmico)
+js/junction.js        faixas: análise, barra e visão 2D da junção
 js/geo.js             geometria: distâncias, projeção na rota
 js/location.js        GPS do usuário
 js/places.js          categorias próximas (Overpass)

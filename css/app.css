@@ -46,6 +46,9 @@
   --seg-text: #0E2A47;
   --seg-on-bg: #0E2A47;
   --seg-on-text: #FFFFFF;
+  --lane-off: #6F86A0;
+  --j-bg: #DCE4EB; --j-ground: #CFD9E2; --j-asphalt: #6E7A88; --j-mark: #FFFFFF; --j-mark-dim: rgba(255,255,255,.42);
+  --j-fill: rgba(229,72,44,.24); --j-case: #FFFFFF;
 
   --font: "Space Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -96,6 +99,9 @@
   --seg-text: #F2F4F7;
   --seg-on-bg: #C8FF3D;
   --seg-on-text: #0B0D10;
+  --lane-off: #3A414C;
+  --j-bg: #0B0E12; --j-ground: #10151A; --j-asphalt: #272D35; --j-mark: #E9EDF2; --j-mark-dim: rgba(233,237,242,.3);
+  --j-fill: rgba(200,255,61,.16); --j-case: #0B0D10;
   color-scheme: dark;
 }
 
@@ -335,6 +341,30 @@ svg { flex: none; }
 .nav-strip svg { width: 20px; height: 20px; fill: none; stroke: var(--strip-accent); stroke-width: 2.8; stroke-linecap: square; stroke-linejoin: miter; }
 .nav-strip .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.nav-text { flex: 1; min-width: 0; }
+.nav-sign.compact .nav-sign-inner { min-height: 0; padding: 8px 12px; gap: 12px; }
+.nav-sign.compact .nav-sign-inner > span svg { width: 40px; height: 40px; }
+.nav-sign.compact .nav-text { display: flex; align-items: center; gap: 10px; }
+.nav-sign.compact .nav-street { flex: 1; min-width: 0; font-size: 26px; -webkit-line-clamp: 1; }
+.nav-sign.compact .nav-dist { margin-top: 0; font-size: 22px; flex: none; }
+.nav-sign:not(.alone) { border-radius: 10px 10px 0 0; }
+.nav-lanes { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 14px; background: var(--strip-bg); border-top: 1px solid rgba(255,255,255,.08); }
+.nav-lanes:last-child, .nav-junction:last-child { border-radius: 0 0 10px 10px; overflow: hidden; }
+.lane-cells { display: flex; border-radius: 8px; overflow: hidden; flex: none; }
+.lane-cell { width: 42px; height: 40px; display: grid; place-items: center; }
+.lane-cell + .lane-cell { border-left: 2px dashed var(--lane-off); }
+.lane-cell svg { width: 26px; height: 26px; fill: none; stroke: var(--lane-off); stroke-width: 2.8; stroke-linecap: square; stroke-linejoin: miter; }
+.lane-cell.on { background: color-mix(in srgb, var(--strip-text) 16%, transparent); }
+.lane-cell.on svg { stroke: var(--strip-text); }
+.lane-label { font: 700 16px var(--signf); letter-spacing: .04em; text-transform: uppercase; color: var(--strip-label); text-align: right; line-height: 1.1; }
+.nav-junction { background: var(--j-bg); }
+.nav-junction > svg { display: block; width: 100%; height: auto; }
+.j-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; background: var(--strip-bg); color: var(--strip-text); font: 700 17px var(--signf); letter-spacing: .03em; text-transform: uppercase; }
+.j-mini { display: flex; gap: 4px; flex: none; }
+.j-mini i { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; }
+.j-mini i svg { width: 16px; height: 16px; fill: none; stroke: var(--lane-off); stroke-width: 3; stroke-linecap: square; stroke-linejoin: miter; }
+.j-mini i.on { background: var(--accent); }
+.j-mini i.on svg { stroke: var(--accent-text); }
 .nav-side { position: absolute; right: 16px; top: calc(var(--nav-top-h, 180px) + 28px + var(--safe-top)); display: flex; flex-direction: column; gap: 10px; }
 .nav-recenter { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(104px + var(--safe-bottom)); height: 46px; padding: 0 18px; border-radius: 23px; border: var(--card-border); background: var(--surface); color: var(--text); box-shadow: var(--shadow); font: 700 15px var(--font); display: flex; align-items: center; gap: 8px; }
 .nav-recenter svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }

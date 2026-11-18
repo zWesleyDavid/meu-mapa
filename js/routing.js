@@ -152,6 +152,10 @@ function toStep(raw) {
     icon: stepIcon(raw),
     type: raw.maneuver?.type,
     modifier: raw.maneuver?.modifier,
+    // faixas no cruzamento da manobra (quando cadastradas no OSM): [{ indications: [...], valid }]
+    lanes: raw.intersections?.[0]?.lanes || null,
+    destinations: raw.destinations || null,
+    ref: raw.ref || null,
   };
 }
 

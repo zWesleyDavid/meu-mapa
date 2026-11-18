@@ -214,7 +214,8 @@ export function viewPadding() {
 export function navPadding() {
   const topH = document.querySelector('.nav-top')?.offsetHeight || 170;
   if (isDesktop()) return { top: 120, bottom: 60, left: 430, right: 40 };
-  return { top: topH + 160, bottom: 150, left: 30, right: 30 };
+  const top = Math.min(topH + 140, window.innerHeight * 0.62);
+  return { top, bottom: 150, left: 30, right: 30 };
 }
 
 export function flyToPlace(place) {
@@ -238,9 +239,9 @@ export function flyTo(lngLat, zoom = 17) {
   map.flyTo({ center: lngLat, zoom, padding: viewPadding(), duration: 700 });
 }
 
-export function followCamera(lngLat, bearingDeg, zoom) {
+export function followCamera(lngLat, bearingDeg, zoom, pitch = CONFIG.nav.pitch) {
   map.easeTo({
-    center: lngLat, bearing: bearingDeg, pitch: CONFIG.nav.pitch, zoom,
+    center: lngLat, bearing: bearingDeg, pitch, zoom,
     padding: navPadding(), duration: 950, easing: (t) => t,
   });
 }
