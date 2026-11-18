@@ -49,7 +49,7 @@ state.profile = store.get('profile', CONFIG.routing.defaultProfile);
 
 function redrawMapContent() {
   if (state.view === 'directions' && state.routes.length) M.drawRoutes(state.routes, state.selectedRoute);
-  if (state.view === 'list') M.drawPois(listState.items || []);
+  if (state.view === 'list') M.drawPois(listState.items || [], listState.category?.id);
 }
 
 // ---------------- Categorias ----------------
@@ -173,7 +173,7 @@ async function openCategory(cat) {
   const update = (items) => {
     if (!alive()) return;
     listState.items = mergePlaces(listState.items, items);
-    M.drawPois(listState.items);
+    M.drawPois(listState.items, listState.category?.id);
     if (state.view === 'list') showList({ keepSheet: true });
   };
 
@@ -211,7 +211,7 @@ function showList({ keepSheet = false } = {}) {
   state.view = 'list';
   setMode('list');
   M.setMarker('place', null);
-  M.drawPois(listState.items);
+  M.drawPois(listState.items, listState.category?.id);
   const node = poiListView({
     category: listState.category, items: listState.items, loading: listState.loading, error: listState.error,
     onPick: (p) => { addRecent(p); setSearchText(p.name); showPlace(p, { fly: true }); },

@@ -2,6 +2,7 @@
 import { CONFIG } from './config.js';
 import { bus } from './core.js';
 import { buildStyle, placeholderStyle } from './mapstyle.js';
+import { provideIcon } from './mapicons.js';
 
 /* global maplibregl */
 export let map;
@@ -21,6 +22,7 @@ export function initMap(theme) {
   });
   map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
+  map.on('styleimagemissing', (e) => provideIcon(map, e.id));
   map.on('style.load', addLayers);
   map.on('load', () => bus.emit('map:ready', map));
   setTheme(theme);
@@ -36,7 +38,17 @@ export async function setTheme(theme) {
   try {
     const style = await buildStyle(theme);
     if (token !== styleToken) return;
+    // Rede de segurança: se o estilo próprio não carregar, volta para o original.
+    let loaded = false;
+    const onLoad = () => { loaded = true; };
+    map.once('style.load', onLoad);
     map.setStyle(style, { diff: false });
+    setTimeout(() => {
+      if (!loaded && token === styleToken) {
+        console.warn('Estilo próprio não carregou; usando o original');
+        map.setStyle(CONFIG.styles.base, { diff: false });
+      }
+    }, 6000);
   } catch (err) {
     console.warn('Estilo próprio indisponível, usando o original', err);
     if (token === styleToken) map.setStyle(CONFIG.styles.base, { diff: false });
@@ -85,13 +97,14 @@ function addLayers() {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': cssVar('--route'), 'line-width': width(5, 10) },
   });
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
   map.addLayer({
-    id: 'pois', type: 'circle', source: 'pois',
-    paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 6, 17, 10],
-      'circle-color': cssVar('--accent'),
-      'circle-stroke-color': cssVar('--surface', '#fff'),
-      'circle-stroke-width': 3,
+    id: 'pois', type: 'symbol', source: 'pois',
+    layout: {
+      'icon-image': ['concat', `mm-${theme}-`, ['get', 'cat']],
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.85, 16, 1.1],
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
     },
   });
 
@@ -140,10 +153,10 @@ export function drawNavProgress(coords, idx, point) {
   map.getSource('routes')?.setData(routeData);
 }
 
-export function drawPois(places) {
+export function drawPois(places, cat = 'default') {
   poiData = {
     type: 'FeatureCollection',
-    features: places.map((p, i) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] }, properties: { i } })),
+    features: places.map((p, i) => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.lng, p.lat] }, properties: { i, cat } })),
   };
   map.getSource('pois')?.setData(poiData);
 }

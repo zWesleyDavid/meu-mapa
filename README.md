@@ -22,7 +22,8 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 ## O que já faz
 - Visual próprio: tema escuro (limão) e claro (azul-marinho + coral), seguindo o sistema ou pelo botão
 - Topo em estilo de sinalização de trânsito nas rotas e na navegação
-- Mapa com estilo próprio nos dois temas: nomes de ruas e avenidas mais cedo e maiores, mais pontos de interesse e números das casas em zoom alto (`js/mapstyle.js`)
+- Mapa com estilo próprio nos dois temas: avenidas em maiúsculas espaçadas, bairros espaçados, escudo de rodovia, nomes mais cedo e maiores, números das casas (`js/mapstyle.js`)
+- Ícones próprios no estilo "Placa" (desenhados pelo app, `js/mapicons.js`): cor por grupo de categoria, pontinhos de longe e placa com nome de perto
 - Sua localização com **cone de direção** (bússola do celular; no iPhone a permissão é pedida ao tocar no botão de localização)
 - Busca com autocompletar, salvos e recentes
 - Categorias rápidas (Comida, Café, Combustível, Farmácia): resultados instantâneos dos pontos do próprio mapa + busca completa no OpenStreetMap (várias etiquetas por categoria, servidores reserva, raio ampliado para 5 km se vier pouca coisa, cache de 5 min)
