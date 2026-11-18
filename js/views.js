@@ -163,20 +163,26 @@ function fieldText(p, placeholder) {
   return { text: p.isUser ? 'Sua localização' : p.name, empty: false };
 }
 
-export function routeTopView({ onBack, onPickOrigin, onPickDestination, onSwap, onMode, modeTimes }) {
+export function routeTopView({ onBack, onPickOrigin, onPickDestination, onPickStop, onAddStop, onRemoveStop, onSwap, onMode, modeTimes, maxStops = 3 }) {
   const o = fieldText(state.origin, 'Escolha a partida');
-  const d = fieldText(state.destination, 'Escolha o destino');
+  const d = fieldText(state.destination, 'Escolha a chegada');
+  const row = (label, f, onclick, extra) => el('div', { class: 'sign-row' },
+    el('button', { class: 'sign-field', onclick, 'aria-label': `${label}: ${f.text}` },
+      el('span', { class: 'sign-label' }, label),
+      el('span', { class: `sign-value${f.empty ? ' empty' : ''}` }, f.text)),
+    extra || null);
+  const stops = (state.stops || []).map((p, i) => row(`${i + 1}ª`, fieldText(p, 'Escolha a parada'), () => onPickStop(i),
+    el('button', { class: 'icon-btn sign-x', 'aria-label': `Remover parada ${i + 1}`, onclick: () => onRemoveStop(i), ...h(icon('close')) })));
+  const canAdd = state.destination && (state.stops || []).length < maxStops;
   const sign = el('div', { class: 'sign' },
     el('div', { class: 'sign-inner' },
       el('button', { class: 'icon-btn', 'aria-label': 'Voltar', onclick: onBack, ...h(icon('back')) }),
       el('div', { class: 'sign-fields' },
-        el('button', { class: 'sign-field', onclick: onPickOrigin, 'aria-label': `Partida: ${o.text}` },
-          el('span', { class: 'sign-label' }, 'DE'),
-          el('span', { class: `sign-value${o.empty ? ' empty' : ''}` }, o.text)),
-        el('button', { class: 'sign-field', onclick: onPickDestination, 'aria-label': `Destino: ${d.text}` },
-          el('span', { class: 'sign-label' }, 'PARA'),
-          el('span', { class: `sign-value${d.empty ? ' empty' : ''}` }, d.text))),
-      el('button', { class: 'icon-btn', 'aria-label': 'Inverter partida e destino', onclick: onSwap, ...h(icon('swap')) })));
+        row('DE', o, onPickOrigin),
+        ...stops,
+        row('PARA', d, onPickDestination),
+        canAdd ? el('button', { class: 'sign-add', onclick: onAddStop, ...h(`<span>+</span> Adicionar parada`) }) : null),
+      el('button', { class: 'icon-btn', 'aria-label': 'Inverter a viagem', onclick: onSwap, ...h(icon('swap')) })));
 
   const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Meio de transporte' },
     Object.entries(CONFIG.routing.profiles).map(([key, p]) =>
@@ -188,6 +194,7 @@ export function routeTopView({ onBack, onPickOrigin, onPickDestination, onSwap, 
 
 // ---------------- Rotas (painel) ----------------
 export function directionsView({ loading, error, showSteps, onSelectRoute, onStart, onToggleSteps, onStep }) {
+  const stopName = (i) => { const p = state.stops?.[i]; return p ? (p.isUser ? 'Sua localização' : p.name) : ''; };
   const wrap = el('div', {});
   if (!state.origin || !state.destination) {
     wrap.append(el('p', { class: 'hint', 'data-peek-end': true },
@@ -213,7 +220,10 @@ export function directionsView({ loading, error, showSteps, onSelectRoute, onSta
     el('button', { class: 'btn big', 'aria-pressed': String(!!showSteps), onclick: onToggleSteps, ...h(`${icon('list')}<span>Passos</span>`) }));
 
   wrap.append(routes, actions);
-  if (showSteps) wrap.append(el('div', { class: 'section-title' }, 'Passo a passo'), stepsList(state.routes[state.selectedRoute].steps, onStep));
+  if (showSteps) {
+    const steps = state.routes[state.selectedRoute].steps.map((st) => (st.isStop ? { ...st, text: `Parada ${st.stopIndex + 1}: ${stopName(st.stopIndex)}` } : st));
+    wrap.append(el('div', { class: 'section-title' }, 'Passo a passo'), stepsList(steps, onStep));
+  }
   return wrap;
 }
 

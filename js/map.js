@@ -172,6 +172,17 @@ export function setMarker(kind, place) {
   markers[kind] = new maplibregl.Marker({ element }).setLngLat([place.lng, place.lat]).addTo(map);
 }
 
+let stopMarkers = [];
+/** Paradas numeradas no mapa. */
+export function setStops(stops) {
+  stopMarkers.forEach((m) => m.remove());
+  stopMarkers = (stops || []).filter((p) => p && !p.isUser).map((p, i) => {
+    const e = div('stop-pin');
+    e.textContent = String(i + 1);
+    return new maplibregl.Marker({ element: e }).setLngLat([p.lng, p.lat]).addTo(map);
+  });
+}
+
 export function setUserDot(pos) {
   if (!pos) return;
   if (!markers.user) {
@@ -207,7 +218,8 @@ const isDesktop = () => window.matchMedia('(min-width: 900px)').matches;
 export function viewPadding() {
   if (isDesktop()) return { top: 60, bottom: 60, left: 450, right: 80 };
   const sheetH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0;
-  const top = document.body.classList.contains('routing') ? 190 : 130;
+  const rt = document.getElementById('route-top');
+  const top = document.body.classList.contains('routing') && rt ? rt.offsetHeight + 40 : 130;
   return { top, bottom: sheetH + 40, left: 40, right: 70 };
 }
 
@@ -218,10 +230,32 @@ export function navPadding() {
   return { top, bottom: 150, left: 30, right: 30 };
 }
 
+/**
+ * Enquadra uma área. O MapLibre guarda a margem do último flyTo/easeTo e SOMA com a margem
+ * passada aqui; se a soma passar do tamanho da tela, ele não faz nada. Por isso zeramos a
+ * margem guardada antes e limitamos a nova ao tamanho da tela.
+ */
+function fitSafe(bounds, opts = {}) {
+  const c = map.getContainer();
+  const W = c.clientWidth || window.innerWidth;
+  const H = c.clientHeight || window.innerHeight;
+  const pad = { ...viewPadding(), ...(opts.padding || {}) };
+  const fit = (a, b, total) => {
+    const free = total - 80; // deixa pelo menos 80 px para o conteúdo
+    if (a + b <= free) return [a, b];
+    const k = free / (a + b);
+    return [Math.floor(a * k), Math.floor(b * k)];
+  };
+  [pad.top, pad.bottom] = fit(pad.top, pad.bottom, H);
+  [pad.left, pad.right] = fit(pad.left, pad.right, W);
+  map.setPadding({ top: 0, bottom: 0, left: 0, right: 0 });
+  map.fitBounds(bounds, { duration: 900, maxZoom: 16, ...opts, padding: pad });
+}
+
 export function flyToPlace(place) {
   if (place.bbox) {
     const [w, s, e, n] = place.bbox;
-    map.fitBounds([[w, s], [e, n]], { padding: viewPadding(), maxZoom: 17, duration: 900 });
+    fitSafe([[w, s], [e, n]], { maxZoom: 17 });
   } else {
     map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(map.getZoom(), 16), padding: viewPadding(), duration: 900 });
   }
@@ -230,7 +264,7 @@ export function flyToPlace(place) {
 export function fitCoords(coords, extra = {}) {
   if (!coords.length) return;
   const b = coords.reduce((acc, c) => acc.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
-  map.fitBounds(b, { padding: viewPadding(), duration: 900, maxZoom: 16, ...extra });
+  fitSafe(b, extra);
 }
 
 export function fitRoute(route, extra) { fitCoords(route.geometry.coordinates, extra); }

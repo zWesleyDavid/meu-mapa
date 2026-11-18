@@ -3,14 +3,20 @@ import { CONFIG } from './config.js';
 
 const cache = new Map();
 
-/** Busca rotas entre dois pontos. Retorna [{ distance, duration, geometry, summary, steps }] */
-export async function getRoutes(profile, from, to, { alternatives = true, steps = true } = {}) {
+/**
+ * Busca rotas. Aceita (perfil, de, para, opções) ou (perfil, [pontos...], opções) para rotas com paradas.
+ * Retorna [{ distance, duration, geometry, summary, steps, legs }]
+ */
+export async function getRoutes(profile, a, b, c) {
+  const points = Array.isArray(a) ? a : [a, b];
+  const { alternatives = true, steps = true } = (Array.isArray(a) ? b : c) || {};
   const base = CONFIG.routing.profiles[profile]?.url;
   if (!base) throw new Error(`Perfil desconhecido: ${profile}`);
-  const coords = `${from.lng.toFixed(6)},${from.lat.toFixed(6)};${to.lng.toFixed(6)},${to.lat.toFixed(6)}`;
+  const coords = points.map((p) => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join(';');
   const params = new URLSearchParams({
     overview: 'full', geometries: 'geojson',
-    steps: String(steps), alternatives: String(alternatives),
+    // o OSRM só calcula alternativas para rotas sem paradas
+    steps: String(steps), alternatives: String(alternatives && points.length === 2),
   });
   const url = `${base}${coords}?${params}`;
   if (cache.has(url)) return cache.get(url);
@@ -26,7 +32,8 @@ export async function getRoutes(profile, from, to, { alternatives = true, steps 
     duration: r.duration,
     geometry: r.geometry,
     summary: r.legs.map((l) => l.summary).filter(Boolean).join(', '),
-    steps: r.legs.flatMap((l) => l.steps || []).map(toStep),
+    legs: r.legs.map((l) => ({ distance: l.distance, duration: l.duration })),
+    steps: r.legs.flatMap((l, li) => (l.steps || []).map((st) => toStep(st, li, r.legs.length))),
   }));
   cache.set(url, routes);
   if (cache.size > 50) cache.delete(cache.keys().next().value);
@@ -141,10 +148,14 @@ export function shortInstruction(raw) {
   }
 }
 
-function toStep(raw) {
+function toStep(raw, leg = 0, legCount = 1) {
+  const isStop = raw.maneuver?.type === 'arrive' && leg < legCount - 1;
   return {
-    text: instruction(raw),
-    short: shortInstruction(raw),
+    leg,
+    isStop,
+    stopIndex: isStop ? leg : null,
+    text: isStop ? `Você chegou à parada ${leg + 1}` : instruction(raw),
+    short: isStop ? `Parada ${leg + 1}` : shortInstruction(raw),
     name: streetName(raw),
     distance: raw.distance,
     duration: raw.duration,
@@ -163,6 +174,7 @@ function toStep(raw) {
 export function cleanSteps(steps) {
   const out = [];
   for (const s of steps) {
+    if (s.type === 'depart' && s.leg > 0) continue; // a partida depois de cada parada é redundante
     const prev = out[out.length - 1];
     if (prev && s.type === 'new name' && s.distance < 30) { prev.distance += s.distance; continue; }
     out.push({ ...s });

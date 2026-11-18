@@ -11,7 +11,7 @@ import { pauseLocationEvents } from './location.js';
 import { analyzeLanes, isComplex, laneIcon, junctionSVG } from './junction.js';
 
 const root = $('#nav');
-const SKIP = new Set(['new name', 'notification']);
+const SKIP = new Set(['new name', 'notification', 'depart']);
 
 let nav = null; // sessão atual
 
@@ -21,10 +21,10 @@ export function isNavigating() { return !!nav; }
  * Inicia a navegação.
  * @param {{ route, profile, destination, simulate?: boolean, onEnd: () => void }} opts
  */
-export function startNav({ route, profile, destination, simulate = false, onEnd }) {
+export function startNav({ route, profile, destination, stops = [], simulate = false, onEnd }) {
   stopNav(false);
   nav = {
-    profile, destination, onEnd,
+    profile, destination, onEnd, stops, stopsDone: 0,
     prep: prepareRoute(route),
     hint: 0, offCount: 0, rerouting: false,
     following: true, muted: store.get('muted', false),
@@ -150,6 +150,23 @@ function showSteps() {
 }
 
 // ---------------- Lógica ----------------
+function stopLabel(i) {
+  const p = nav.stops[i];
+  const name = p ? (p.isUser ? 'Sua localização' : p.name) : '';
+  return `Parada ${i + 1}${name ? ` · ${name}` : ''}`;
+}
+
+/** Marca as paradas já alcançadas (para avisar e para recalcular só o que falta). */
+function checkStops(progress) {
+  for (const s of nav.prep.steps) {
+    if (!s.isStop || s.stopIndex < nav.stopsDone) continue;
+    if (progress >= s.at - CONFIG.nav.arriveMeters) {
+      nav.stopsDone = s.stopIndex + 1;
+      toast(`Chegou: ${stopLabel(s.stopIndex)}`, 3500);
+    }
+  }
+}
+
 function nextStep(progress, after = 0) {
   const list = nav.prep.steps;
   let found = 0;
@@ -186,7 +203,7 @@ function onPosition(pos) {
   nav.lastPos = { lngLat: shown, bearing: heading, speed: pos.speed };
 
   M.setPuck(shown, heading);
-  if (onRoute) M.drawNavProgress(nav.prep.coords, s.idx, s.point);
+  if (onRoute) { M.drawNavProgress(nav.prep.coords, s.idx, s.point); checkStops(progress); }
   render(progress, pos.speed);
   if (nav.following) camera(nav.lastPos);
 
@@ -232,7 +249,8 @@ function render(progress, speed) {
   if (step) {
     d = step.at - progress;
     ui.icon.innerHTML = icon(step.icon);
-    ui.street.textContent = step.type === 'arrive' ? (nav.destination.name || 'Destino') : (step.name || step.short);
+    ui.street.textContent = step.isStop ? stopLabel(step.stopIndex)
+      : step.type === 'arrive' ? (nav.destination.name || 'Destino') : (step.name || step.short);
     ui.street.classList.toggle('long', ui.street.textContent.length > 16);
     ui.dist.textContent = fmtDistance(d).toUpperCase();
     lanes = analyzeLanes(step);
@@ -266,7 +284,7 @@ function render(progress, speed) {
   if (after && !showJunction) {
     ui.strip.hidden = false;
     ui.stripIcon.innerHTML = icon(after.icon);
-    ui.stripText.textContent = after.type === 'arrive' ? 'Destino' : (after.name || after.short);
+    ui.stripText.textContent = after.isStop ? `Parada ${after.stopIndex + 1}` : after.type === 'arrive' ? 'Destino' : (after.name || after.short);
   } else {
     ui.strip.hidden = true;
   }
@@ -287,7 +305,10 @@ async function reroute(pos) {
   toast('Recalculando rota…');
   say('Recalculando rota', 'reroute');
   try {
-    const [r] = await getRoutes(nav.profile, pos, nav.destination, { alternatives: false });
+    const rest = nav.stops.slice(nav.stopsDone).filter((p) => !p.isUser);
+    const [r] = await getRoutes(nav.profile, [pos, ...rest, nav.destination], { alternatives: false });
+    // as paradas restantes viram 1, 2… na rota nova: guarda o deslocamento
+    nav.stops = rest; nav.stopsDone = 0;
     if (!nav) return;
     nav.prep = prepareRoute(r);
     nav.hint = 0; nav.offCount = 0; nav.progress = 0; nav.spoken.clear();

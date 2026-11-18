@@ -30,6 +30,7 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 - Card do lugar com tempo de carro, distância e chegada, e detalhes do OpenStreetMap: endereço, aberto/fechado agora e horários da semana, telefone, WhatsApp, site, Instagram, comodidades e combustíveis, com link para sugerir edição (`js/details.js`, `js/hours.js`)
 - Toque longo (ou clique direito): "Rotas até aqui", "Sair daqui", "O que tem aqui?"
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português
+- **Partida, chegada e até 3 paradas**: toque em DE/PARA ou em "+ Adicionar parada" e busque ou toque no mapa; também pelo toque longo ("Adicionar como parada"); inverter inverte a viagem toda
 - **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
   trecho já percorrido em cinza, **zoom dinâmico** (afasta na rodovia, aproxima perto das manobras),
   **faixas** (barra a até ~800 m e **visão 2D da junção** em pontos confusos, a partir dos dados de faixa do OSM), tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,

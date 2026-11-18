@@ -16,6 +16,8 @@ import { startPick, cancelPick, setSearchText, addRecent, isSaved, toggleSaved }
 import { placeView, poiListView, routeTopView, directionsView } from './views.js';
 
 const body = $('#sheet-body');
+const MAX_STOPS = 3;
+state.stops = [];
 const routeTop = $('#route-top');
 const ctx = $('#ctx-menu');
 
@@ -235,7 +237,15 @@ function showDirections({ sheetState } = {}) {
     onBack: closeDirections,
     onPickOrigin: () => startPick('origin'),
     onPickDestination: () => startPick('destination'),
-    onSwap: () => { [state.origin, state.destination] = [state.destination, state.origin]; updateEndpoints(); computeRoutes(); },
+    onPickStop: (i) => startPick(`stop:${i}`),
+    onAddStop: () => startPick('stop:new'),
+    onRemoveStop: (i) => { state.stops.splice(i, 1); updateEndpoints(); computeRoutes(); },
+    onSwap: () => {
+      // inverte a viagem inteira, inclusive a ordem das paradas
+      const all = [state.origin, ...state.stops, state.destination].reverse();
+      state.origin = all[0]; state.destination = all[all.length - 1]; state.stops = all.slice(1, -1);
+      updateEndpoints(); computeRoutes();
+    },
     onMode: (key) => { state.profile = key; store.set('profile', key); computeRoutes({ modeOnly: true }); },
   }));
   body.replaceChildren(directionsView({
@@ -249,6 +259,7 @@ function showDirections({ sheetState } = {}) {
 }
 
 function openDirections(destination, { keepOrigin = false } = {}) {
+  if (state.view !== 'directions') state.stops = [];
   if (destination) state.destination = destination;
   if (!keepOrigin && !state.origin && state.userPosition) state.origin = { isUser: true };
   M.setMarker('place', null);
@@ -265,6 +276,8 @@ function openDirections(destination, { keepOrigin = false } = {}) {
 function closeDirections() {
   state.routes = [];
   state.origin = null;
+  state.stops = [];
+  M.setStops([]);
   M.clearRoutes();
   M.setMarker('origin', null);
   M.setMarker('destination', null);
@@ -277,6 +290,13 @@ function closeDirections() {
 function updateEndpoints() {
   M.setMarker('origin', state.origin);
   M.setMarker('destination', state.destination);
+  M.setStops(state.stops);
+}
+
+/** Pontos da viagem na ordem: partida, paradas, chegada (null se faltar algum). */
+function tripPoints() {
+  const pts = [state.origin, ...state.stops, state.destination].map(coordsOf);
+  return pts.every(Boolean) ? pts : null;
 }
 
 let routeToken = 0;
@@ -288,14 +308,13 @@ function coordsOf(p) {
 }
 
 async function computeRoutes({ modeOnly = false } = {}) {
-  const from = coordsOf(state.origin);
-  const to = coordsOf(state.destination);
+  const pts = tripPoints();
   state.routes = [];
   state.selectedRoute = 0;
   routeError = null;
   showStepsList = false;
   M.clearRoutes();
-  if (!from || !to) { routeLoading = false; showDirections(); return; }
+  if (!pts) { routeLoading = false; showDirections(); return; }
   if (!modeOnly) modeTimes = {};
 
   const token = ++routeToken;
@@ -304,14 +323,14 @@ async function computeRoutes({ modeOnly = false } = {}) {
 
   if (!modeOnly) {
     Object.keys(CONFIG.routing.profiles).filter((k) => k !== state.profile).forEach((k) => {
-      getRoutes(k, from, to, { alternatives: false, steps: false })
+      getRoutes(k, pts, { alternatives: false, steps: false })
         .then((r) => { if (token === routeToken) { modeTimes[k] = r[0].duration; if (state.view === 'directions') showDirections(); } })
         .catch(() => {});
     });
   }
 
   try {
-    const routes = await getRoutes(state.profile, from, to);
+    const routes = await getRoutes(state.profile, pts);
     if (token !== routeToken) return;
     routes.forEach((r) => { r.label = fmtDuration(r.duration); });
     state.routes = routes;
@@ -319,7 +338,8 @@ async function computeRoutes({ modeOnly = false } = {}) {
     routeLoading = false;
     M.drawRoutes(routes, 0);
     showDirections({ sheetState: 'half' });
-    M.fitRoute(routes[0]);
+    // enquadra a rota inteira depois que o painel assumiu a altura final
+    requestAnimationFrame(() => requestAnimationFrame(() => M.fitRoute(routes[0], { bearing: 0 })));
   } catch (err) {
     if (token !== routeToken) return;
     routeLoading = false;
@@ -345,24 +365,35 @@ function startNavigation() {
   cancelPick();
   setSheet('hidden');
   startNav({
-    route, profile: state.profile, destination: state.destination, simulate,
+    route, profile: state.profile, destination: state.destination, stops: state.stops.slice(), simulate,
     onEnd: () => {
       M.map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
-      if (state.destination) { showDirections({ sheetState: 'half' }); M.drawRoutes(state.routes, state.selectedRoute); M.fitRoute(route); } else showIdle();
+      if (state.destination) {
+        showDirections({ sheetState: 'half' });
+        M.drawRoutes(state.routes, state.selectedRoute);
+        setTimeout(() => M.fitRoute(route, { bearing: 0 }), 450);
+      } else showIdle();
     },
   });
 }
 
 // ---------------- Eventos ----------------
+function applyPick(target, place) {
+  const value = place.isUser ? { isUser: true } : place;
+  if (target === 'origin' || target === 'destination') state[target] = value;
+  else if (target === 'stop:new') state.stops.push(value);
+  else if (target.startsWith('stop:')) state.stops[+target.slice(5)] = value;
+  setSearchText('');
+  updateEndpoints();
+  computeRoutes();
+  if (target === 'destination' && !state.origin) startPick('origin');
+}
+
 bus.on('place:chosen', (place) => {
   if (state.pickTarget) {
     const target = state.pickTarget;
     cancelPick();
-    state[target] = place.isUser ? { isUser: true } : place;
-    setSearchText('');
-    updateEndpoints();
-    computeRoutes();
-    if (target === 'destination' && !state.origin) startPick('origin');
+    applyPick(target, place);
     return;
   }
   listState.category = null;
@@ -371,6 +402,7 @@ bus.on('place:chosen', (place) => {
 });
 
 bus.on('search:cleared', () => { if (state.view === 'place') showIdle(); });
+bus.on('pick:cancel', () => { if (state.view === 'directions') showDirections(); });
 
 let flyOnFix = true;
 bus.on('position', ({ position, first }) => {
@@ -413,6 +445,7 @@ let ctxLngLat = null;
 bus.on('map:longpress', ({ lngLat, point }) => {
   if (isNavigating()) return;
   ctxLngLat = lngLat;
+  ctx.querySelector('[data-action="stop"]').hidden = !(state.view === 'directions' && state.destination);
   $('#ctx-title').textContent = `${lngLat.lat.toFixed(5)}, ${lngLat.lng.toFixed(5)}`;
   ctx.hidden = false;
   const w = ctx.offsetWidth; const h = ctx.offsetHeight;
@@ -439,6 +472,11 @@ ctx.addEventListener('click', async (e) => {
   } else if (action === 'to') {
     openDirections(temp);
     enrich(temp).then((p) => { if (state.destination?.id === temp.id) { state.destination = p; if (state.view === 'directions') showDirections(); } });
+  } else if (action === 'stop') {
+    if (state.stops.length >= MAX_STOPS) { toast(`Máximo de ${MAX_STOPS} paradas.`); return; }
+    state.stops.push(temp);
+    updateEndpoints(); computeRoutes();
+    enrich(temp).then((p) => { state.stops = state.stops.map((x) => (x.id === temp.id ? p : x)); if (state.view === 'directions') showDirections(); });
   } else if (action === 'from') {
     state.origin = temp;
     openDirections(null, { keepOrigin: true });
@@ -457,6 +495,21 @@ async function enrich(place) {
 // Cliques no mapa: pontos da lista, pontos de interesse do estilo
 bus.on('map:click', (e) => {
   if (!ctx.hidden) { hideCtx(); return; }
+  if (state.pickTarget) {
+    // escolhendo partida/parada/chegada: toque no mapa também vale
+    const target = state.pickTarget;
+    const poi = M.map.queryRenderedFeatures(e.point).find((f) => f.layer.type === 'symbol' && f.properties?.name && f.geometry?.type === 'Point');
+    const [lng, lat] = poi ? poi.geometry.coordinates : [e.lngLat.lng, e.lngLat.lat];
+    const temp = { id: `pt:${lng.toFixed(6)},${lat.toFixed(6)}`, name: poi ? (poi.properties['name:pt'] || poi.properties.name) : 'Ponto no mapa', address: '', lng, lat };
+    cancelPick();
+    applyPick(target, temp);
+    if (!poi) enrich(temp).then((p) => {
+      const swap = (x) => (x?.id === temp.id ? { ...p, id: temp.id } : x);
+      state.origin = swap(state.origin); state.destination = swap(state.destination); state.stops = state.stops.map(swap);
+      if (state.view === 'directions') showDirections();
+    });
+    return;
+  }
   if (isNavigating() || state.view === 'directions') {
     const alt = M.map.queryRenderedFeatures(e.point, { layers: ['route-alt'] })[0];
     if (alt && !isNavigating()) selectRoute(alt.properties.idx);

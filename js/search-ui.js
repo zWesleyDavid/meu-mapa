@@ -15,9 +15,11 @@ let active = -1;
 
 const PLACEHOLDERS = {
   null: 'Buscar um lugar ou endereço',
-  origin: 'De onde você vai sair?',
-  destination: 'Para onde você vai?',
+  origin: 'Partida: busque ou toque no mapa',
+  destination: 'Chegada: busque ou toque no mapa',
+  stop: 'Parada: busque ou toque no mapa',
 };
+const placeholderFor = (target) => PLACEHOLDERS[String(target).startsWith('stop') ? 'stop' : target] || PLACEHOLDERS.null;
 
 export function getRecents() { return store.get('recents', []); }
 export function getSaved() { return store.get('saved', []); }
@@ -102,7 +104,7 @@ const runSearch = debounce(async (q) => {
 
 input.addEventListener('input', () => {
   const q = input.value.trim();
-  clearBtn.hidden = !input.value;
+  clearBtn.hidden = !input.value && !state.pickTarget;
   if (q.length < 2) { render(getRecents(), { recents: true }); return; }
   runSearch(q);
 });
@@ -112,10 +114,7 @@ input.addEventListener('focus', () => {
   else list.hidden = !list.children.length;
 });
 
-input.addEventListener('blur', () => setTimeout(() => {
-  list.hidden = true;
-  if (state.pickTarget && !input.value) cancelPick();
-}, 150));
+input.addEventListener('blur', () => setTimeout(() => { list.hidden = true; }, 150));
 
 input.addEventListener('keydown', (e) => {
   const rows = [...list.querySelectorAll('li[role="option"]')];
@@ -127,6 +126,7 @@ input.addEventListener('keydown', (e) => {
     rows[active].scrollIntoView({ block: 'nearest' });
   } else if (e.key === 'Escape') {
     input.blur();
+    if (state.pickTarget) { cancelPick(); bus.emit('pick:cancel'); }
   }
 });
 
@@ -138,8 +138,10 @@ form.addEventListener('submit', (e) => {
 });
 
 clearBtn.addEventListener('click', () => {
+  // escolhendo um ponto: o X cancela a escolha
+  if (state.pickTarget && !input.value) { cancelPick(); input.blur(); bus.emit('pick:cancel'); return; }
   input.value = '';
-  clearBtn.hidden = true;
+  clearBtn.hidden = !state.pickTarget;
   bus.emit('search:cleared');
   input.focus();
 });
@@ -147,9 +149,9 @@ clearBtn.addEventListener('click', () => {
 export function startPick(target) {
   state.pickTarget = target;
   document.body.classList.add('picking');
-  input.placeholder = PLACEHOLDERS[target];
+  input.placeholder = placeholderFor(target);
   input.value = '';
-  clearBtn.hidden = true;
+  clearBtn.hidden = false; // vira "cancelar"
   input.focus();
 }
 
@@ -157,6 +159,7 @@ export function cancelPick() {
   state.pickTarget = null;
   document.body.classList.remove('picking');
   input.placeholder = PLACEHOLDERS.null;
+  clearBtn.hidden = !input.value;
 }
 
 export function setSearchText(text) {
