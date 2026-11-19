@@ -53,6 +53,7 @@ export function stopNav(callEnd = true) {
   if (!nav) return;
   const { onEnd } = nav;
   nav.unsub.forEach((u) => u());
+  clearTimeout(collapseTimer);
   stopSimulation();
   nav.wakeLock?.release?.().catch(() => {});
   try { speechSynthesis.cancel(); } catch { /* sem voz */ }
@@ -89,18 +90,48 @@ function buildUI() {
   ui.speed = el('div', { class: 'nav-speed', 'aria-label': 'Velocidade atual' }, ui.speedVal, el('span', {}, 'km/h'));
 
   ui.etaMain = el('b', {}, '–');
-  ui.etaSub = el('span', {}, '');
+  ui.etaSub = el('span', { class: 'eta-sub' }, '');
+  ui.etaMini = el('span', { class: 'eta-mini' }, '');
   ui.menuBtn = el('button', { class: 'btn square', 'aria-label': 'Mais opções', html: icon('more'), onclick: toggleMenu });
+  // Toque no tempo recolhe/expande o card (vira uma pílula à esquerda só com o tempo)
+  ui.etaBtn = el('button', { class: 'nav-eta', 'aria-expanded': 'true', 'aria-label': 'Recolher painel', onclick: () => setCollapsed(!ui.bottom.classList.contains('collapsed')) },
+    el('span', { class: 'nav-eta-txt' }, ui.etaMain, el('span', { class: 'eta-line' }, ui.etaSub, ui.etaMini)),
+    el('span', { class: 'nav-chev', html: icon('chevron') }));
   ui.bottom = el('div', { class: 'nav-bottom' },
-    el('div', { class: 'nav-eta' }, ui.etaMain, ui.etaSub),
-    ui.menuBtn,
-    el('button', { class: 'btn danger', onclick: () => stopNav(true) }, 'Encerrar'));
+    ui.etaBtn,
+    el('div', { class: 'nav-actions' },
+      ui.menuBtn,
+      el('button', { class: 'btn danger', onclick: () => stopNav(true) }, 'Encerrar')));
+  ui.bottom.addEventListener('pointerdown', () => scheduleCollapse());
 
   ui.menu = null;
   ui.steps = null;
   root.replaceChildren(ui.top, ui.side, ui.recenter, ui.speed, ui.bottom);
   updateMuteBtn();
+  scheduleCollapse();
   requestAnimationFrame(() => document.documentElement.style.setProperty('--nav-top-h', `${ui.top.offsetHeight}px`));
+}
+
+// ---------------- Card recolhível ----------------
+const landscapePhone = () => window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches;
+let collapseTimer = null;
+
+function setCollapsed(v) {
+  if (!nav || !ui.bottom) return;
+  if (v) closePopovers();
+  ui.bottom.classList.toggle('collapsed', v);
+  ui.etaBtn.setAttribute('aria-expanded', String(!v));
+  ui.etaBtn.setAttribute('aria-label', v ? 'Expandir painel' : 'Recolher painel');
+  if (!v) scheduleCollapse();
+}
+
+/** Deitado (suporte no carro), o card se recolhe sozinho depois de alguns segundos sem toque. */
+function scheduleCollapse() {
+  clearTimeout(collapseTimer);
+  if (!landscapePhone()) return;
+  collapseTimer = setTimeout(() => {
+    if (nav && !ui.menu && !ui.steps && landscapePhone()) setCollapsed(true);
+  }, 7000);
 }
 
 function updateMuteBtn() {
@@ -248,6 +279,13 @@ function render(progress, speed) {
 
   if (step) {
     d = step.at - progress;
+    if (nav.signKey !== step.at) {
+      // nova manobra: a placa troca com uma transição
+      nav.signKey = step.at;
+      ui.sign.classList.remove('swap');
+      void ui.sign.offsetWidth;
+      ui.sign.classList.add('swap');
+    }
     ui.icon.innerHTML = icon(step.icon);
     ui.street.textContent = step.isStop ? stopLabel(step.stopIndex)
       : step.type === 'arrive' ? (nav.destination.name || 'Destino') : (step.name || step.short);
@@ -291,12 +329,15 @@ function render(progress, speed) {
   const lastVisible = [ui.strip, ui.lanes, ui.junction].some((x) => !x.hidden);
   ui.sign.classList.toggle('alone', !lastVisible);
   ui.top.classList.toggle('with-junction', showJunction);
+  const bh = ui.bottom?.isConnected ? ui.bottom.offsetHeight : 0;
+  if (bh && bh !== nav.bottomH) { nav.bottomH = bh; document.documentElement.style.setProperty('--nav-bottom-h', `${bh}px`); }
   const h = ui.top.offsetHeight;
   if (h && h !== nav.topH) { nav.topH = h; document.documentElement.style.setProperty('--nav-top-h', `${h}px`); }
 
   nav.camTarget = targetCamera(speed, d, showJunction);
   ui.etaMain.textContent = fmtDuration(remainingTime);
   ui.etaSub.textContent = `${fmtDistance(remaining)} · chegada ${fmtArrival(remainingTime)}`;
+  ui.etaMini.textContent = `chega ${fmtArrival(remainingTime)}`;
   ui.speedVal.textContent = speed != null && speed >= 0 ? Math.round(speed * 3.6) : '–';
 }
 
