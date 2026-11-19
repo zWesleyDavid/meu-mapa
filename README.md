@@ -37,7 +37,7 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
-- Painel arrastável no celular e coluna lateral em telas largas; instalável (PWA)
+- Painel arrastável no celular em pé; **celular deitado (suporte no carro)** usa uma coluna compacta à esquerda e deixa o mapa livre à direita, inclusive na navegação; coluna lateral também no desktop; instalável (PWA)
 
 ## Estrutura
 

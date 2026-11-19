@@ -4,7 +4,8 @@ import { $ } from './core.js';
 const sheet = $('#sheet');
 const body = $('#sheet-body');
 const handle = $('#sheet-handle');
-const mq = window.matchMedia('(min-width: 900px)');
+// layout em coluna: desktop ou celular deitado
+const mq = window.matchMedia('(min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px)');
 
 let current = 'peek';
 let peekPx = 150;

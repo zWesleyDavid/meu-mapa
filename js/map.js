@@ -212,11 +212,17 @@ export function setPuck(lngLat, bearingDeg) {
 }
 
 // ---------------- Câmera ----------------
-const isDesktop = () => window.matchMedia('(min-width: 900px)').matches;
+// layout em coluna (desktop ou celular deitado): painéis à esquerda, mapa à direita
+const isColumn = () => window.matchMedia('(min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px)').matches;
+const isLandscapePhone = () => window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches;
+const colRight = (sel) => (document.querySelector(sel)?.getBoundingClientRect().right || 0);
 
 /** Espaço ocupado pelos painéis, para centralizar o conteúdo na área livre. */
 export function viewPadding() {
-  if (isDesktop()) return { top: 60, bottom: 60, left: 450, right: 80 };
+  if (isColumn()) {
+    const left = Math.max(colRight('.panel-col'), 0) + 40;
+    return isLandscapePhone() ? { top: 30, bottom: 30, left, right: 70 } : { top: 60, bottom: 60, left, right: 80 };
+  }
   const sheetH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sheet-h')) || 0;
   const rt = document.getElementById('route-top');
   const top = document.body.classList.contains('routing') && rt ? rt.offsetHeight + 40 : 130;
@@ -225,7 +231,12 @@ export function viewPadding() {
 
 export function navPadding() {
   const topH = document.querySelector('.nav-top')?.offsetHeight || 170;
-  if (isDesktop()) return { top: 120, bottom: 60, left: 430, right: 40 };
+  if (isColumn()) {
+    const left = colRight('.nav-top') + 30;
+    // deitado: o carro fica mais embaixo para mostrar mais estrada à frente
+    if (isLandscapePhone()) return { top: Math.round(window.innerHeight * 0.42), bottom: 16, left, right: 70 };
+    return { top: 120, bottom: 60, left, right: 40 };
+  }
   const top = Math.min(topH + 140, window.innerHeight * 0.62);
   return { top, bottom: 150, left: 30, right: 30 };
 }

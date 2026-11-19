@@ -295,7 +295,7 @@ svg { flex: none; }
 .rt-sub { font-size: 13px; color: var(--text-2); display: block; margin-top: 3px; }
 .rt-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .badge { font: 700 11px var(--mono); letter-spacing: .06em; color: var(--accent-text); background: var(--accent); padding: 3px 7px; border-radius: 6px; text-transform: uppercase; }
-.route-actions { display: flex; gap: 10px; margin-bottom: 8px; }
+.route-actions { display: flex; gap: 10px; margin-bottom: 8px; position: sticky; bottom: 0; z-index: 2; background: var(--surface); padding: 8px 0 4px; }
 
 .steps { list-style: none; padding: 0; margin: 8px 0 0; }
 .steps li { display: flex; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
@@ -402,29 +402,89 @@ body.navigating .user-loc { display: none; }
 .toast { position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: calc(var(--sheet-h) + 80px + var(--safe-bottom)); background: #0E1013; color: #F2F4F7; padding: 11px 16px; border-radius: 12px; font-size: 14px; box-shadow: var(--shadow-lg); max-width: calc(100vw - 32px); }
 body.navigating .toast { bottom: calc(200px + var(--safe-bottom)); }
 
-/* ---------- Desktop / telas largas ---------- */
-@media (min-width: 900px) {
-  .panel-col { display: flex; flex-direction: column; gap: 10px; position: fixed; z-index: 20; top: 16px; left: 16px; bottom: 16px; width: 400px; pointer-events: none; }
+/* ---------- Layout em coluna: desktop e celular deitado ---------- */
+:root { --col-w: 400px; --col-gap: 16px; --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); }
+@media (orientation: landscape) and (max-height: 560px) {
+  :root { --col-w: min(340px, 42vw); --col-gap: 10px; }
+}
+
+@media (min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px) {
+  .panel-col { display: flex; flex-direction: column; gap: var(--col-gap); position: fixed; z-index: 20; top: calc(var(--col-gap) + var(--safe-top)); left: calc(var(--col-gap) + var(--safe-left)); bottom: calc(var(--col-gap) + var(--safe-bottom)); width: var(--col-w); pointer-events: none; }
   .panel-col > * { pointer-events: auto; }
   .topbar, .route-top { position: relative; top: auto; left: auto; right: auto; flex: none; }
   .route-top[hidden], .topbar[hidden] { display: none; }
   .chips { margin: 0; padding: 0 0 4px; }
   .results { position: absolute; top: 64px; left: 0; right: 0; z-index: 5; }
-  .sheet { position: relative; left: auto; right: auto; bottom: auto; height: auto; max-height: 100%; flex: 0 1 auto; transform: none !important; border-radius: 22px; border: var(--card-border); transition: opacity .2s; }
+  .sheet { position: relative; left: auto; right: auto; bottom: auto; height: auto; max-height: 100%; min-height: 0; flex: 0 1 auto; transform: none !important; border-radius: 22px; border: var(--card-border); transition: opacity .2s; padding-bottom: 0; }
   .sheet[data-state="hidden"] { display: none; }
   .sheet-handle { display: none; }
   .sheet-body { padding-top: 18px; }
-  .map-fabs { bottom: 30px; }
+  .map-fabs { bottom: calc(var(--col-gap) + 14px + var(--safe-bottom)); right: calc(16px + var(--safe-right)); }
   .maplibregl-ctrl-bottom-left, .maplibregl-ctrl-bottom-right { bottom: 0 !important; }
-  .maplibregl-ctrl-bottom-left { left: 430px; }
-  .toast { bottom: 30px; }
-  .nav-top { right: auto; width: 400px; left: 16px; top: 16px; }
-  .nav-bottom, .nav-arrived { right: auto; width: 400px; left: 16px; bottom: 16px; }
-  .nav-steps { right: auto; width: 400px; left: 16px; }
-  .nav-menu { left: 186px; right: auto; }
-  .nav-speed { left: 432px; bottom: 16px; }
-  .nav-recenter { left: calc(50% + 200px); bottom: 24px; }
-  .nav-side { top: 16px; }
+  .maplibregl-ctrl-bottom-left { left: calc(var(--col-w) + var(--col-gap) * 2 + var(--safe-left)); }
+  .toast { bottom: 30px; left: calc((100vw + var(--col-w)) / 2); }
+  .nav-top { right: auto; width: var(--col-w); left: calc(var(--col-gap) + var(--safe-left)); top: calc(var(--col-gap) + var(--safe-top)); }
+  .nav-bottom, .nav-arrived { right: auto; width: var(--col-w); left: calc(var(--col-gap) + var(--safe-left)); bottom: calc(var(--col-gap) + var(--safe-bottom)); }
+  .nav-steps, .nav-menu { right: auto; width: var(--col-w); left: calc(var(--col-gap) + var(--safe-left)); }
+  .nav-speed { left: calc(var(--col-w) + var(--col-gap) * 2 + var(--safe-left)); bottom: calc(var(--col-gap) + var(--safe-bottom)); }
+  .nav-recenter { left: calc((100vw + var(--col-w)) / 2); bottom: calc(var(--col-gap) + 8px + var(--safe-bottom)); }
+  .nav-side { top: calc(var(--col-gap) + var(--safe-top)); right: calc(var(--col-gap) + var(--safe-right)); }
+  body.navigating .toast { bottom: 24px; }
+}
+
+/* ---------- Celular deitado (suporte no carro): tudo mais compacto ---------- */
+@media (orientation: landscape) and (max-height: 560px) {
+  .searchbox { height: 46px; border-radius: 14px; }
+  .chip { height: 32px; font-size: 13px; padding: 0 12px; }
+  .results { top: 54px; max-height: calc(100dvh - 90px); }
+  .sheet { border-radius: 18px; }
+  .sheet-body { padding: 12px 14px 14px; }
+  .place-title { font-size: 22px; margin: 4px 0 2px; }
+  .stats { margin: 10px 0; }
+  .stat { padding: 8px 10px; border-radius: 12px; }
+  .stat-v { font-size: 17px; }
+  .btn { height: 46px; border-radius: 14px; }
+  .btn.square { width: 46px; }
+  .btn.big { height: 48px; font-size: 16px; border-radius: 14px; }
+  .sign-inner { padding: 4px; }
+  .sign-value { font-size: 18px; }
+  .sign-label { font-size: 12px; width: 36px; }
+  .sign .icon-btn { width: 34px; height: 34px; }
+  .seg button { height: 38px; font-size: 16px; }
+  .route-card { padding: 10px 12px; border-radius: 14px; }
+  .rt-time { font-size: 20px; }
+  .fab { width: 44px; height: 44px; border-radius: 14px; }
+
+  /* navegação: coluna à esquerda, mapa livre à direita */
+  .nav-sign { padding: 4px; }
+  .nav-sign-inner { min-height: 0; padding: 8px 10px; gap: 10px; border-width: 2px; }
+  .nav-sign-inner > span svg { width: 42px; height: 42px; }
+  .nav-street { font-size: 22px; }
+  .nav-street.long { font-size: 19px; }
+  .nav-dist { font-size: 19px; margin-top: 5px; padding: 1px 8px; }
+  .nav-sign.compact .nav-street { font-size: 20px; }
+  .nav-sign.compact .nav-dist { font-size: 18px; }
+  .nav-strip { font-size: 15px; padding: 7px 12px; gap: 8px; }
+  .nav-strip svg { width: 17px; height: 17px; }
+  .nav-lanes { padding: 6px 10px; }
+  .lane-cell { width: 34px; height: 32px; }
+  .lane-cell svg { width: 22px; height: 22px; }
+  .lane-label { font-size: 14px; }
+  .nav-junction > svg { max-height: calc(100dvh - 240px); }
+  .j-foot { font-size: 14px; padding: 6px 10px; }
+  .nav-bottom { padding: 8px 8px 8px 14px; border-radius: 18px; gap: 8px; }
+  .nav-eta b { font-size: 22px; }
+  .nav-eta span { font-size: 12px; margin-top: 3px; }
+  .nav .btn.square { width: 44px; height: 44px; }
+  .btn.danger { height: 44px; padding: 0 14px; font-size: 15px; }
+  .nav-speed { width: 56px; height: 56px; border-radius: 16px; }
+  .nav-speed b { font-size: 20px; }
+  .nav-side { gap: 8px; }
+  .nav-recenter { height: 40px; font-size: 14px; }
+  .nav-arrived { padding: 14px 16px; }
+  .nav-arrived h2 { font-size: 20px; }
+  .nav-steps { max-height: calc(100dvh - 110px); bottom: 74px; }
+  .nav-menu { bottom: 74px; }
 }
 
 /* ---------- Estados da tela ---------- */
