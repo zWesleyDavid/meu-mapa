@@ -139,6 +139,11 @@ svg { flex: none; }
 
 .chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px; padding: 0 14px 4px; }
 .chips::-webkit-scrollbar { display: none; }
+.chips { scroll-snap-type: x proximity; scroll-padding-inline: 14px; --fade: 44px; }
+.chips.fade-r { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to right, #000 calc(100% - var(--fade)), transparent); }
+.chips.fade-l { -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade)); mask-image: linear-gradient(to right, transparent, #000 var(--fade)); }
+.chips.fade-l.fade-r { -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); mask-image: linear-gradient(to right, transparent, #000 var(--fade), #000 calc(100% - var(--fade)), transparent); }
+.chips .chip { scroll-snap-align: start; }
 .chip {
   flex: none; height: 36px; padding: 0 14px; border-radius: 12px; border: var(--card-border);
   background: var(--surface); color: var(--text); box-shadow: var(--shadow); font: 500 14px var(--font);
@@ -165,16 +170,33 @@ svg { flex: none; }
 .sign-inner { border: 2px solid var(--sign-text); border-radius: 6px; padding: 8px 6px; display: flex; align-items: center; gap: 6px; }
 .sign .icon-btn { color: var(--sign-text); width: 40px; height: 40px; }
 .sign .icon-btn svg { stroke-width: 2.6; stroke-linecap: square; stroke-linejoin: miter; width: 22px; height: 22px; }
-.sign-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sign-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .sign-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .sign-row .sign-field { flex: 1; }
 .sign .sign-x { width: 30px; height: 30px; flex: none; opacity: .85; }
+.sign-x-sp { width: 30px; flex: none; }
 .sign .sign-x svg { width: 18px; height: 18px; stroke-width: 2.6; }
-.sign-add { align-self: flex-start; margin: 4px 0 2px; padding: 4px 10px; border: 1.5px dashed var(--sign-sub); border-radius: 6px; background: transparent; color: var(--sign-text); font: 700 15px var(--signf); letter-spacing: .06em; text-transform: uppercase; }
+.sign-add { align-self: flex-start; margin: 1px 0 0; padding: 4px 10px; border: 1.5px dashed var(--sign-sub); border-radius: 6px; background: transparent; color: var(--sign-text); font: 700 15px var(--signf); letter-spacing: .06em; text-transform: uppercase; }
 .sign-add span { font-size: 18px; margin-right: 2px; }
-.sign-field { display: flex; align-items: baseline; gap: 8px; border: 0; background: transparent; color: inherit; padding: 2px 0; text-align: left; min-width: 0; }
-.sign-label { font: 700 14px var(--signf); letter-spacing: .08em; color: var(--sign-sub); width: 40px; flex: none; }
-.sign-value { font: 700 21px var(--signf); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sign-field {
+  display: flex; align-items: center; gap: 8px; border: 0; color: inherit; text-align: left; min-width: 0; cursor: pointer;
+  padding: 5px 8px; border-radius: 6px;
+  background: color-mix(in srgb, var(--sign-text) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sign-text) 24%, transparent);
+  transition: background .15s, box-shadow .15s, transform .1s;
+}
+.sign-field:hover { background: color-mix(in srgb, var(--sign-text) 19%, transparent); }
+.sign-field:active { background: color-mix(in srgb, var(--sign-text) 26%, transparent); transform: scale(.985); }
+.sign-field:focus-visible { outline: 0; box-shadow: inset 0 0 0 2px var(--sign-text); }
+.sign-edit { margin-left: auto; flex: none; display: grid; place-items: center; opacity: .72; }
+.sign .sign-edit svg { width: 16px; height: 16px; stroke-width: 2.4; }
+.sign-btn { border-radius: 8px; flex: none; }
+.sign-btn:active { background: color-mix(in srgb, var(--sign-text) 18%, transparent); }
+.sign .sign-btn svg { width: 26px; height: 26px; }
+.sign-ico .sh { fill: none; stroke: currentColor; stroke-width: 6.5; stroke-linecap: butt; }
+.sign-ico .hd { fill: currentColor; stroke: none; }
+.sign-label { font: 700 14px var(--signf); letter-spacing: .08em; color: var(--sign-sub); width: 38px; flex: none; }
+.sign-value { font: 700 21px var(--signf); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; line-height: 1.15; }
 .sign-value.empty { opacity: .7; font-weight: 600; }
 .sign-field:nth-child(2) .sign-value { font-weight: 800; }
 
@@ -183,6 +205,8 @@ svg { flex: none; }
 .seg button:last-child { border-right: 0; }
 .seg button[aria-pressed="true"] { background: var(--seg-on-bg); color: var(--seg-on-text); }
 .seg svg { width: 20px; height: 20px; stroke-width: 2.2; }
+.seg button { min-width: 0; padding: 0 6px; }
+.seg-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ---------- Painel (bottom sheet) ---------- */
 .sheet {
@@ -302,11 +326,12 @@ svg { flex: none; }
 .route-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 :root[data-theme="dark"] .route-card { border-width: 1px; }
 :root[data-theme="dark"] .route-card[aria-pressed="true"] { border-width: 2px; }
-.rt-time { font: 700 26px var(--mono); display: block; }
+.rt-time { font: 700 26px var(--mono); display: block; white-space: nowrap; }
 .rt-sub { font-size: 13px; color: var(--text-2); display: block; margin-top: 3px; }
 .rt-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
 .badge { font: 700 11px var(--mono); letter-spacing: .06em; color: var(--accent-text); background: var(--accent); padding: 3px 7px; border-radius: 6px; text-transform: uppercase; }
 .route-actions { display: flex; gap: 10px; margin-bottom: 8px; position: sticky; bottom: 0; z-index: 2; background: var(--surface); padding: 8px 0 4px; }
+.route-actions::before { content: ''; position: absolute; left: 0; right: 0; top: -18px; height: 18px; background: linear-gradient(to bottom, transparent, var(--surface)); pointer-events: none; }
 
 .steps { list-style: none; padding: 0; margin: 8px 0 0; }
 .steps li { display: flex; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
@@ -471,6 +496,18 @@ body.navigating .toast { bottom: calc(200px + var(--safe-bottom)); }
   body.navigating .toast { bottom: 24px; }
 }
 
+/* Rotas na coluna: a coluna inteira rola (placa + modos + rotas) e o Iniciar fica preso embaixo */
+@media (min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px) {
+  body.routing:not(.picking) .panel-col {
+    overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none;
+    /* folga lateral para a sombra dos cartões não ser cortada pela rolagem */
+    left: calc(var(--col-gap) + var(--safe-left) - 10px); width: calc(var(--col-w) + 20px); padding: 0 10px;
+  }
+  body.routing:not(.picking) .panel-col::-webkit-scrollbar { display: none; }
+  body.routing:not(.picking) .panel-col > .sheet { flex: none; max-height: none; touch-action: pan-y; }
+  body.routing:not(.picking) .panel-col .sheet-body { overflow: visible !important; }
+}
+
 /* ---------- Celular deitado (suporte no carro): tudo mais compacto ---------- */
 @media (orientation: landscape) and (max-height: 560px) {
   .searchbox { height: 46px; border-radius: 14px; }
@@ -485,11 +522,24 @@ body.navigating .toast { bottom: calc(200px + var(--safe-bottom)); }
   .btn { height: 46px; border-radius: 14px; }
   .btn.square { width: 46px; }
   .btn.big { height: 48px; font-size: 16px; border-radius: 14px; }
-  .sign-inner { padding: 4px; }
+  .sign { padding: 4px; }
+  .sign-inner { padding: 4px; gap: 4px; }
+  .sign-fields { gap: 4px; }
+  .sign-field { padding: 3px 7px; gap: 6px; }
   .sign-value { font-size: 18px; }
-  .sign-label { font-size: 12px; width: 36px; }
+  .sign-label { font-size: 12px; width: 37px; letter-spacing: .05em; }
+  .sign .sign-edit svg { width: 14px; height: 14px; }
   .sign .icon-btn { width: 34px; height: 34px; }
-  .seg button { height: 38px; font-size: 16px; }
+  .sign .sign-btn svg { width: 22px; height: 22px; }
+  .sign .sign-x { width: 28px; height: 28px; }
+  .sign-x-sp { width: 28px; }
+  .sign.has-stops .sign-field { padding: 2px 7px; }
+  .sign.has-stops .sign-value { font-size: 16px; }
+  .sign.has-stops .sign-fields { gap: 3px; }
+  .sign-add { font-size: 13px; padding: 2px 8px; }
+  .sign-add span { font-size: 15px; }
+  .seg button { height: 36px; font-size: 16px; gap: 5px; }
+  .seg svg { width: 18px; height: 18px; }
   .route-card { padding: 10px 12px; border-radius: 14px; }
   .rt-time { font-size: 20px; }
   .fab { width: 44px; height: 44px; border-radius: 14px; }

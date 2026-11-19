@@ -16,6 +16,17 @@ export function fmtDuration(s) {
   return r ? `${h} h ${r} min` : `${h} h`;
 }
 
+/** Versão curta para botões estreitos: "7 min", "1h05", "24h45", "76h". */
+export function fmtDurationShort(s) {
+  if (s == null) return '';
+  const min = Math.max(1, Math.round(s / 60));
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const r = min % 60;
+  if (h >= 48 || !r) return `${h}h`;
+  return `${h}h${String(r).padStart(2, '0')}`;
+}
+
 export function fmtArrival(s) {
   const d = new Date(Date.now() + s * 1000);
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });

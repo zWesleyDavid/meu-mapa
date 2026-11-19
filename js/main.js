@@ -87,7 +87,19 @@ CONFIG.categories.forEach((c) => {
 });
 function markChip(id) {
   chipsEl.querySelectorAll('.chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cat === id)));
+  const on = id && chipsEl.querySelector(`.chip[data-cat="${id}"]`);
+  if (on) on.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 }
+// esmaece só a borda que ainda tem categorias escondidas
+function updateChipFade() {
+  const max = chipsEl.scrollWidth - chipsEl.clientWidth;
+  chipsEl.classList.toggle('fade-l', chipsEl.scrollLeft > 2);
+  chipsEl.classList.toggle('fade-r', chipsEl.scrollLeft < max - 2);
+}
+chipsEl.addEventListener('scroll', updateChipFade, { passive: true });
+window.addEventListener('resize', updateChipFade);
+requestAnimationFrame(updateChipFade);
+document.fonts?.ready.then(updateChipFade);
 
 // ---------------- Telas ----------------
 function mount(node, sheetState) {

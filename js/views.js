@@ -2,7 +2,7 @@
 import { el, state } from './core.js';
 import { icon } from './icons.js';
 import { CONFIG } from './config.js';
-import { fmtDistance, fmtDuration, fmtArrival, fmtCoords } from './format.js';
+import { fmtDistance, fmtDuration, fmtDurationShort, fmtArrival, fmtCoords } from './format.js';
 import { cleanSteps } from './routing.js';
 import { openStatus, formatRanges, DAY_LABELS, todayIndex } from './hours.js';
 import { maneuverIcon } from './maneuvers.js';
@@ -164,32 +164,44 @@ function fieldText(p, placeholder) {
   return { text: p.isUser ? 'Sua localização' : p.name, empty: false };
 }
 
+// Setas sólidas da placa, no mesmo desenho das setas de manobra.
+const SIGN_ICON = {
+  back: '<path class="sh" d="M44 24H16"/><path class="hd" d="M3 24 18 11v26z"/>',
+  swap: '<path class="sh" d="M15 44V16"/><path class="hd" d="M15 3 3 18h24z"/><path class="sh" d="M33 4v28"/><path class="hd" d="M33 45 21 30h24z"/>',
+};
+const signIcon = (name) => `<svg class="sign-ico" viewBox="0 0 48 48" aria-hidden="true">${SIGN_ICON[name]}</svg>`;
+
 export function routeTopView({ onBack, onPickOrigin, onPickDestination, onPickStop, onAddStop, onRemoveStop, onSwap, onMode, modeTimes, maxStops = 3 }) {
   const o = fieldText(state.origin, 'Escolha a partida');
   const d = fieldText(state.destination, 'Escolha a chegada');
   const row = (label, f, onclick, extra) => el('div', { class: 'sign-row' },
-    el('button', { class: 'sign-field', onclick, 'aria-label': `${label}: ${f.text}` },
+    el('button', { class: 'sign-field', onclick, 'aria-label': `${label}: ${f.text}. Toque para alterar` },
       el('span', { class: 'sign-label' }, label),
-      el('span', { class: `sign-value${f.empty ? ' empty' : ''}` }, f.text)),
+      el('span', { class: `sign-value${f.empty ? ' empty' : ''}` }, f.text),
+      el('span', { class: 'sign-edit', 'aria-hidden': 'true', ...h(icon('edit')) })),
     extra || null);
   const stops = (state.stops || []).map((p, i) => row(`${i + 1}ª`, fieldText(p, 'Escolha a parada'), () => onPickStop(i),
     el('button', { class: 'icon-btn sign-x', 'aria-label': `Remover parada ${i + 1}`, onclick: () => onRemoveStop(i), ...h(icon('close')) })));
+  // com paradas, DE/PARA ganham o mesmo recuo do X para os campos ficarem alinhados
+  const spacer = () => (stops.length ? el('span', { class: 'sign-x-sp', 'aria-hidden': 'true' }) : null);
   const canAdd = state.destination && (state.stops || []).length < maxStops;
-  const sign = el('div', { class: 'sign' },
+  const sign = el('div', { class: `sign${stops.length ? ' has-stops' : ''}` },
     el('div', { class: 'sign-inner' },
-      el('button', { class: 'icon-btn', 'aria-label': 'Voltar', onclick: onBack, ...h(icon('back')) }),
+      el('button', { class: 'icon-btn sign-btn', 'aria-label': 'Voltar', onclick: onBack, ...h(signIcon('back')) }),
       el('div', { class: 'sign-fields' },
-        row('DE', o, onPickOrigin),
+        row('DE', o, onPickOrigin, spacer()),
         ...stops,
-        row('PARA', d, onPickDestination),
+        row('PARA', d, onPickDestination, spacer()),
         canAdd ? el('button', { class: 'sign-add', onclick: onAddStop, ...h(`<span>+</span> Adicionar parada`) }) : null),
-      el('button', { class: 'icon-btn', 'aria-label': 'Inverter a viagem', onclick: onSwap, ...h(icon('swap')) })));
+      el('button', { class: 'icon-btn sign-btn', 'aria-label': 'Inverter a viagem', title: 'Inverter a viagem', onclick: onSwap, ...h(signIcon('swap')) })));
 
   const seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Meio de transporte' },
-    Object.entries(CONFIG.routing.profiles).map(([key, p]) =>
-      el('button', { 'aria-pressed': String(state.profile === key), 'aria-label': p.label, onclick: () => onMode(key) },
+    Object.entries(CONFIG.routing.profiles).map(([key, p]) => {
+      const t = modeTimes?.[key];
+      return el('button', { 'aria-pressed': String(state.profile === key), 'aria-label': t != null ? `${p.label}: ${fmtDuration(t)}` : p.label, onclick: () => onMode(key) },
         el('span', h(icon(key))),
-        modeTimes?.[key] != null ? fmtDuration(modeTimes[key]) : p.label)));
+        el('span', { class: 'seg-t' }, t != null ? fmtDurationShort(t) : p.label));
+    }));
   return [sign, seg];
 }
 

@@ -40,6 +40,8 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 - **Ajustes** (botão ao lado da busca): tema automático/claro/escuro, abreviar nomes na placa (R., Av., Serv., Dr.…), voz, recolher o painel sozinho
 - Setas de manobra próprias (`js/maneuvers.js`) e placa com a distância embaixo da seta
 - Painel arrastável no celular em pé; **celular deitado (suporte no carro)** usa uma coluna compacta à esquerda e deixa o mapa livre à direita, inclusive na navegação; coluna lateral também no desktop; instalável (PWA)
+  - Na tela de rotas deitado, a coluna inteira rola (placa, modos e rotas) e o Iniciar fica sempre preso embaixo; tempos longos aparecem curtos nos botões de modo ("24h45")
+- Categorias com as bordas esmaecidas quando há mais itens para rolar; campos DE/PARA com cara de botão (fundo, borda e lápis)
 
 ## Estrutura
 
