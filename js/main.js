@@ -565,7 +565,25 @@ bus.on('map:ready', () => {
 });
 
 if ('serviceWorker' in navigator && window.isSecureContext && location.protocol.startsWith('http')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // updateViaCache 'none': o navegador sempre confere se há um sw.js novo
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+    reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
+  // Versão nova assumiu: recarrega para usar os arquivos novos (nunca no meio de uma navegação)
+  let reloadPending = false;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return; // primeira instalação: nada a atualizar
+    if (isNavigating()) { reloadPending = true; return; }
+    store.set('justUpdated', true);
+    location.reload();
+  });
+  bus.on('nav:ended', () => { if (reloadPending) { store.set('justUpdated', true); location.reload(); } });
+  if (store.get('justUpdated', false)) {
+    store.set('justUpdated', false);
+    setTimeout(() => toast(`App atualizado (versão ${CONFIG.version})`, 3000), 1200);
+  }
 }
 
 // Exposto para depuração no console e para futuras extensões.

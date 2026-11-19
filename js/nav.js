@@ -63,6 +63,7 @@ export function stopNav(callEnd = true) {
   root.hidden = true;
   root.replaceChildren();
   if (callEnd) onEnd?.();
+  bus.emit('nav:ended');
 }
 
 // ---------------- UI ----------------
@@ -170,7 +171,8 @@ function toggleMenu() {
   ui.menu = el('div', { class: 'nav-menu' },
     item('list', 'Passo a passo', showSteps),
     nav.sim ? item('close', 'Parar simulação', () => { stopSimulation(); toast('Simulação parada. Usando o GPS.'); })
-      : item('play', 'Simular viagem', () => { startSimulation(); toast('Simulando a viagem pela rota'); }));
+      : item('play', 'Simular viagem', () => { startSimulation(); toast('Simulando a viagem pela rota'); }),
+    el('div', { class: 'nav-menu-ver' }, `Versão ${CONFIG.version}`));
   root.append(ui.menu);
 }
 
