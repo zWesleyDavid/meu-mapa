@@ -9,6 +9,8 @@ import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
 import { pauseLocationEvents } from './location.js';
 import { analyzeLanes, isComplex, laneIcon, junctionSVG } from './junction.js';
+import { maneuverIcon } from './maneuvers.js';
+import { signName, getSetting } from './settings.js';
 
 const root = $('#nav');
 const SKIP = new Set(['new name', 'notification', 'depart']);
@@ -70,13 +72,16 @@ export function stopNav(callEnd = true) {
 const ui = {};
 
 function buildUI() {
-  ui.icon = el('span', { html: icon('straight') });
+  ui.icon = el('span', { class: 'nav-mv-ico', html: maneuverIcon('straight') });
   ui.street = el('div', { class: 'nav-street' }, '—');
   ui.dist = el('div', { class: 'nav-dist' }, '');
-  ui.sign = el('div', { class: 'nav-sign' }, el('div', { class: 'nav-sign-inner' }, ui.icon, el('div', { class: 'nav-text' }, ui.street, ui.dist)));
+  // Placa: seta com a distância embaixo, à esquerda; nome da via ocupando o resto (até 2 linhas)
+  ui.sign = el('div', { class: 'nav-sign' }, el('div', { class: 'nav-sign-inner' },
+    el('div', { class: 'nav-mv' }, ui.icon, ui.dist),
+    el('div', { class: 'nav-text' }, ui.street)));
   ui.lanes = el('div', { class: 'nav-lanes', hidden: true });
   ui.junction = el('div', { class: 'nav-junction', hidden: true });
-  ui.stripIcon = el('span', { html: icon('left') });
+  ui.stripIcon = el('span', { class: 'strip-ico', html: maneuverIcon('left') });
   ui.stripText = el('span', { class: 'txt' }, '');
   ui.strip = el('div', { class: 'nav-strip' }, el('span', { class: 'lbl' }, 'Depois'), ui.stripIcon, ui.stripText);
   ui.top = el('div', { class: 'nav-top' }, ui.sign, ui.junction, ui.lanes, ui.strip);
@@ -129,7 +134,7 @@ function setCollapsed(v) {
 /** Deitado (suporte no carro), o card se recolhe sozinho depois de alguns segundos sem toque. */
 function scheduleCollapse() {
   clearTimeout(collapseTimer);
-  if (!landscapePhone()) return;
+  if (!landscapePhone() || !getSetting('autoCollapse')) return;
   collapseTimer = setTimeout(() => {
     if (nav && !ui.menu && !ui.steps && landscapePhone()) setCollapsed(true);
   }, 7000);
@@ -288,10 +293,10 @@ function render(progress, speed) {
       void ui.sign.offsetWidth;
       ui.sign.classList.add('swap');
     }
-    ui.icon.innerHTML = icon(step.icon);
+    ui.icon.innerHTML = maneuverIcon(step.icon);
     ui.street.textContent = step.isStop ? stopLabel(step.stopIndex)
-      : step.type === 'arrive' ? (nav.destination.name || 'Destino') : (step.name || step.short);
-    ui.street.classList.toggle('long', ui.street.textContent.length > 16);
+      : step.type === 'arrive' ? (nav.destination.name || 'Destino') : (signName(step.name) || step.short);
+    ui.street.classList.toggle('long', ui.street.textContent.length > 22);
     ui.dist.textContent = fmtDistance(d).toUpperCase();
     lanes = analyzeLanes(step);
     showJunction = !!lanes && isComplex(lanes, step, after) && d > 12 && d < Math.max(320, v * 22);
@@ -323,8 +328,8 @@ function render(progress, speed) {
 
   if (after && !showJunction) {
     ui.strip.hidden = false;
-    ui.stripIcon.innerHTML = icon(after.icon);
-    ui.stripText.textContent = after.isStop ? `Parada ${after.stopIndex + 1}` : after.type === 'arrive' ? 'Destino' : (after.name || after.short);
+    ui.stripIcon.innerHTML = maneuverIcon(after.icon);
+    ui.stripText.textContent = after.isStop ? `Parada ${after.stopIndex + 1}` : after.type === 'arrive' ? 'Destino' : (signName(after.name) || after.short);
   } else {
     ui.strip.hidden = true;
   }
@@ -370,7 +375,7 @@ function arrive() {
   stopSimulation();
   say(`Você chegou ao destino${nav.destination.name ? `, ${nav.destination.name}` : ''}`, 'arrive');
   ui.bottom.remove(); ui.speed.remove(); ui.side.remove(); closePopovers();
-  ui.icon.innerHTML = icon('arrive');
+  ui.icon.innerHTML = maneuverIcon('arrive');
   ui.street.textContent = nav.destination.name || 'Destino';
   ui.dist.textContent = 'CHEGOU';
   ui.strip.hidden = true; ui.sign.classList.add('alone');

@@ -1,4 +1,5 @@
 // Faixas: análise dos dados de faixa do OSRM, barra de faixas e visão 2D esquemática da junção.
+import { signName } from './settings.js';
 
 const ARROW = {
   straight: 'M12 21V5M6 11l6-6 6 6',
@@ -71,7 +72,7 @@ export function isComplex(info, step, after) {
 
 function signTexts(step) {
   const dest = (step.destinations || '').split(/[:,]/).map((x) => x.trim()).filter(Boolean);
-  const l1 = step.ref?.split(';')[0] || dest[0] || step.name || step.short || '';
+  const l1 = step.ref?.split(';')[0] || dest[0] || signName(step.name) || step.short || '';
   const rest = dest.filter((d) => d !== l1);
   const side = (step.modifier || '').includes('right') ? 'SAÍDA À DIREITA' : (step.modifier || '').includes('left') ? 'SAÍDA À ESQUERDA' : 'SIGA EM FRENTE';
   const cut = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);

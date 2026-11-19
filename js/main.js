@@ -13,7 +13,8 @@ import { startNav, stopNav, isNavigating } from './nav.js';
 import { fmtDuration } from './format.js';
 import { setSheet, measurePeek } from './sheet.js';
 import { startPick, cancelPick, setSearchText, addRecent, isSaved, toggleSaved } from './search-ui.js';
-import { placeView, poiListView, routeTopView, directionsView } from './views.js';
+import { placeView, poiListView, routeTopView, directionsView, settingsView } from './views.js';
+import { getSetting, setSetting } from './settings.js';
 
 const body = $('#sheet-body');
 const MAX_STOPS = 3;
@@ -23,14 +24,12 @@ const ctx = $('#ctx-menu');
 
 // ---------------- Tema ----------------
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
-let theme = store.get('theme', null) || (systemDark.matches ? 'dark' : 'light');
+let theme = null;
 
 function applyTheme(t, updateMap = true) {
+  if (t === theme && updateMap) return;
   theme = t;
   document.documentElement.dataset.theme = t;
-  const btn = $('#theme-toggle');
-  btn.innerHTML = icon(t === 'dark' ? 'sun' : 'moon');
-  btn.setAttribute('aria-label', t === 'dark' ? 'Usar tema claro' : 'Usar tema escuro');
   document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', t === 'dark' ? '#101317' : '#EEF2F5'));
   if (updateMap) {
     M.setTheme(t);
@@ -38,14 +37,41 @@ function applyTheme(t, updateMap = true) {
     M.map.once('style.load', redrawMapContent);
   }
 }
-$('#theme-toggle').addEventListener('click', () => {
-  const next = theme === 'dark' ? 'light' : 'dark';
-  store.set('theme', next);
-  applyTheme(next);
+const resolvedTheme = () => { const t = getSetting('theme'); return t === 'auto' ? (systemDark.matches ? 'dark' : 'light') : t; };
+systemDark.addEventListener('change', () => { if (getSetting('theme') === 'auto') applyTheme(resolvedTheme()); });
+bus.on('settings:changed', ({ key }) => {
+  if (key === 'theme') applyTheme(resolvedTheme());
+  if (state.view === 'settings') showSettings();
 });
-systemDark.addEventListener('change', (e) => { if (!store.get('theme', null)) applyTheme(e.matches ? 'dark' : 'light'); });
 
-applyTheme(theme, false);
+// ---------------- Ajustes ----------------
+$('#settings-btn').addEventListener('click', () => (state.view === 'settings' ? closeSettings() : showSettings()));
+let viewBeforeSettings = null;
+
+function showSettings() {
+  if (state.view !== 'settings') viewBeforeSettings = { view: state.view, place: state.selectedPlace };
+  const first = state.view !== 'settings';
+  state.view = 'settings';
+  setMode('settings');
+  markChip(null);
+  const node = settingsView({
+    values: { theme: getSetting('theme'), abbreviate: getSetting('abbreviate'), voice: getSetting('voice'), autoCollapse: getSetting('autoCollapse') },
+    version: CONFIG.version,
+    onChange: (key, value) => setSetting(key, value),
+    onClose: closeSettings,
+  });
+  if (first) mount(node, 'half'); else body.replaceChildren(node);
+}
+
+function closeSettings() {
+  const prev = viewBeforeSettings;
+  viewBeforeSettings = null;
+  if (prev?.view === 'place' && prev.place) showPlace(prev.place);
+  else if (prev?.view === 'list' && listState.category) showList();
+  else showIdle();
+}
+
+applyTheme(resolvedTheme(), false);
 M.initMap(theme);
 state.profile = store.get('profile', CONFIG.routing.defaultProfile);
 

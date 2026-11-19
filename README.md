@@ -37,6 +37,8 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
+- **Ajustes** (botão ao lado da busca): tema automático/claro/escuro, abreviar nomes na placa (R., Av., Serv., Dr.…), voz, recolher o painel sozinho
+- Setas de manobra próprias (`js/maneuvers.js`) e placa com a distância embaixo da seta
 - Painel arrastável no celular em pé; **celular deitado (suporte no carro)** usa uma coluna compacta à esquerda e deixa o mapa livre à direita, inclusive na navegação; coluna lateral também no desktop; instalável (PWA)
 
 ## Estrutura
@@ -57,6 +59,8 @@ js/location.js        GPS do usuário
 js/places.js          categorias próximas (Overpass)
 js/mapstyle.js        estilo do mapa (cores, densidade de nomes, números)
 js/compass.js         bússola do aparelho
+js/maneuvers.js       setas de manobra (haste + ponta sólida)
+js/settings.js        preferências e abreviação de nomes de ruas
 js/search-ui.js       caixa de busca, recentes, teclado
 js/views.js           renderização das telas do painel
 js/main.js            controlador: liga tudo

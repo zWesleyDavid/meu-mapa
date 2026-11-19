@@ -5,6 +5,7 @@ import { CONFIG } from './config.js';
 import { fmtDistance, fmtDuration, fmtArrival, fmtCoords } from './format.js';
 import { cleanSteps } from './routing.js';
 import { openStatus, formatRanges, DAY_LABELS, todayIndex } from './hours.js';
+import { maneuverIcon } from './maneuvers.js';
 
 const h = (html) => ({ html });
 
@@ -231,8 +232,32 @@ export function stepsList(steps, onStep) {
   return el('ol', { class: 'steps' },
     cleanSteps(steps).map((s) =>
       el('li', { onclick: () => onStep?.(s) },
-        el('span', { class: 'st-ico', ...h(icon(s.icon)) }),
+        el('span', { class: 'st-ico', ...h(maneuverIcon(s.icon)) }),
         el('div', {},
           el('div', { class: 'st-text' }, s.text),
           s.distance > 0 && s.type !== 'arrive' ? el('div', { class: 'st-dist' }, fmtDistance(s.distance)) : null))));
+}
+
+// ---------------- Ajustes ----------------
+export function settingsView({ values, version, onChange, onClose }) {
+  const sw = (key, title, sub) => el('div', { class: 'set-row' },
+    el('div', { class: 'set-txt' }, el('div', { class: 'set-title' }, title), sub ? el('div', { class: 'set-sub' }, sub) : null),
+    el('button', { class: 'switch', role: 'switch', 'aria-checked': String(!!values[key]), 'aria-label': title, onclick: () => onChange(key, !values[key]) },
+      el('span', { class: 'knob' })));
+  const themes = [['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Escuro']];
+  return el('div', { class: 'settings' },
+    el('div', { class: 'list-head', 'data-peek-end': true },
+      el('div', {}, el('div', { class: 'eyebrow' }, 'Ajustes'), el('h2', { class: 'list-title' }, 'Preferências')),
+      el('button', { class: 'close-btn', 'aria-label': 'Fechar', onclick: onClose, ...h(icon('close')) })),
+    el('div', { class: 'section-title' }, 'Aparência'),
+    el('div', { class: 'set-row' },
+      el('div', { class: 'set-txt' }, el('div', { class: 'set-title' }, 'Tema'), el('div', { class: 'set-sub' }, 'Automático segue o tema do celular')),
+    ),
+    el('div', { class: 'seg set-seg', role: 'group', 'aria-label': 'Tema' },
+      themes.map(([v, label]) => el('button', { 'aria-pressed': String(values.theme === v), onclick: () => onChange('theme', v) }, label))),
+    el('div', { class: 'section-title' }, 'Navegação'),
+    sw('abbreviate', 'Abreviar nomes na placa', 'R., Av., Serv., Dr.… Ex.: R. Dep. Otacílio Costa'),
+    sw('voice', 'Instruções por voz', 'Fala as manobras e a faixa a usar'),
+    sw('autoCollapse', 'Recolher o painel sozinho', 'Com o celular deitado, o painel de baixo recolhe após alguns segundos'),
+    el('div', { class: 'meta-line' }, `Versão ${version} · dados © OpenStreetMap`));
 }
