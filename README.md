@@ -42,6 +42,7 @@ Os testes nunca acessam a internet: o `fetch` é trocado por respostas simuladas
 | `tests/geocoder.test.js` | busca: ordem por proximidade, duas consultas ao Photon, falhas e cancelamento |
 | `tests/routing.test.js` | instruções em português, paradas, cache e mensagens de erro do OSRM |
 | `tests/places.test.js` | junção de resultados por categoria, servidores reserva do Overpass, detalhes do lugar (inclusive links seguros) |
+| `tests/map3d.test.js` | modo 3D: o que ligar (inclusive bateria fraca), parede da rota, prédio do destino e desenho das setas 3D |
 | `tests/junction.test.js` | faixas e visão da junção (inclusive nomes com HTML escapados) |
 | `tests/hours.test.js` | horário de funcionamento: aberto/fechado, madrugada, formatos não entendidos |
 | `tests/settings.test.js` | preferências e abreviações (R., Av., Dr.…) |
@@ -72,6 +73,14 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
 - **Ajustes** (botão ao lado da busca): tema automático/claro/escuro, abreviar nomes na placa (R., Av., Serv., Dr.…), voz, recolher o painel sozinho
 - Setas de manobra próprias (`js/maneuvers.js`) e placa com a distância embaixo da seta
+- **Modo 3D** (Ajustes › Visual do mapa, ou o botão 2D/3D no mapa e na navegação). O padrão continua plano. Cada parte liga separada:
+  - prédios com a altura do OpenStreetMap;
+  - relevo com sombreamento (dados abertos do Mapterhorn; usa mais dados móveis);
+  - céu no horizonte;
+  - prédio do lugar/destino em destaque na cor do app;
+  - rota em 3D (parede de luz);
+  - seta da navegação: bolinha de sempre, **A** (seta 3D estilo Waze) ou **B** (bolinha 3D com a setinha);
+  - volta sozinho ao plano com a bateria abaixo de 20% fora da tomada (onde o navegador informa a bateria).
 - Painel arrastável no celular em pé; **celular deitado (suporte no carro)** usa uma coluna compacta à esquerda e deixa o mapa livre à direita, inclusive na navegação; coluna lateral também no desktop; instalável (PWA)
   - Na tela de rotas deitado, a coluna inteira rola (placa, modos e rotas) e o Iniciar fica sempre preso embaixo; tempos longos aparecem curtos nos botões de modo ("24h45")
 - Categorias com as bordas esmaecidas quando há mais itens para rolar; campos DE/PARA com cara de botão (fundo, borda e lápis)
@@ -97,6 +106,7 @@ js/hours.js           horário de funcionamento (opening_hours)
 js/mapstyle.js        estilo do mapa (cores, densidade de nomes, números)
 js/compass.js         bússola do aparelho
 js/maneuvers.js       setas de manobra (haste + ponta sólida)
+js/map3d.js           modo 3D: o que ligar, parede da rota, prédio do destino, setas 3D (lógica pura)
 js/mapicons.js        ícones do mapa desenhados no app (estilo "Placa")
 js/icons.js           ícones de traço da interface
 js/format.js          distância, tempo e horário em pt-BR
@@ -114,7 +124,7 @@ package.json          só para `npm test`; não há dependências nem build
 - Localização: `position`, `position:error`, `heading`
 - Busca e telas: `place:chosen`, `search:cleared`, `pick:cancel`, `category:open`, `route:select`
 - Navegação: `nav:rerouted`, `nav:ended`
-- Ajustes: `settings:changed`
+- Ajustes: `settings:changed`, `map3d:changed`
 
 Novas funcionalidades devem escutar/emitir eventos em vez de importar umas às outras.
 No console: `meuMapa.state`, `meuMapa.map()`, `meuMapa.bus`.

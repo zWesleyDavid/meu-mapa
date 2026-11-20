@@ -10,7 +10,7 @@ import { stepsList } from './views.js';
 import { pauseLocationEvents } from './location.js';
 import { analyzeLanes, isComplex, laneIcon, junctionSVG } from './junction.js';
 import { maneuverIcon } from './maneuvers.js';
-import { signName, getSetting } from './settings.js';
+import { signName, getSetting, setSetting } from './settings.js';
 
 const root = $('#nav');
 const SKIP = new Set(['new name', 'notification', 'depart']);
@@ -42,6 +42,7 @@ export function startNav({ route, profile, destination, stops = [], simulate = f
 
   nav.unsub.push(bus.on('position', ({ position }) => { if (!nav.sim) onPosition(position); }));
   nav.unsub.push(bus.on('map:userpan', () => setFollowing(false)));
+  nav.unsub.push(bus.on('map3d:changed', update3DButton));
 
   if (simulate) startSimulation();
   else if (state.userPosition) onPosition(state.userPosition);
@@ -88,7 +89,9 @@ function buildUI() {
 
   ui.muteBtn = el('button', { class: 'fab', onclick: toggleMute });
   ui.overviewBtn = el('button', { class: 'fab', 'aria-label': 'Ver rota inteira', html: icon('overview'), onclick: overview });
-  ui.side = el('div', { class: 'nav-side' }, ui.muteBtn, ui.overviewBtn);
+  ui.mode3dBtn = el('button', { class: 'fab fab-txt', onclick: toggle3D });
+  ui.side = el('div', { class: 'nav-side' }, ui.muteBtn, ui.overviewBtn, ui.mode3dBtn);
+  update3DButton();
 
   ui.recenter = el('button', { class: 'nav-recenter', hidden: true, onclick: () => setFollowing(true), html: `${icon('locate')}<span>Recentralizar</span>` });
 
@@ -143,6 +146,18 @@ function scheduleCollapse() {
 function updateMuteBtn() {
   ui.muteBtn.innerHTML = icon(nav.muted ? 'mute' : 'volume');
   ui.muteBtn.setAttribute('aria-label', nav.muted ? 'Ativar voz' : 'Silenciar voz');
+}
+
+/** Botão 2D/3D: mostra o modo para o qual vai trocar. */
+function toggle3D() {
+  if (getSetting('mapMode') === '3d' && !M.is3D()) { toast('Bateria fraca: o 3D volta quando carregar (dá para mudar em Ajustes).', 3500); return; }
+  setSetting('mapMode', M.is3D() ? 'flat' : '3d');
+}
+function update3DButton() {
+  if (!ui.mode3dBtn) return;
+  const on = M.is3D();
+  ui.mode3dBtn.textContent = on ? '2D' : '3D';
+  ui.mode3dBtn.setAttribute('aria-label', on ? 'Mapa plano' : 'Mapa em 3D');
 }
 
 function toggleMute() {

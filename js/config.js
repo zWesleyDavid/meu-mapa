@@ -1,7 +1,7 @@
 // Configuração central. Troque provedores aqui sem mexer no resto do código.
 export const CONFIG = {
   appName: 'Meu Mapa',
-  version: '17',  // suba junto com o VERSION do sw.js
+  version: '18',  // suba junto com o VERSION do sw.js
 
   // Vista inicial antes de achar sua localização (Brasil inteiro).
   initialView: { center: [-51.9, -14.2], zoom: 3.6 },
@@ -74,6 +74,15 @@ export const CONFIG = {
   categoryRadius: 2000,      // raio inicial
   categoryRadiusMax: 5000,   // amplia se vier pouca coisa
   categoryMinResults: 8,
+
+  // Modo 3D (Ajustes › Visual do mapa)
+  map3d: {
+    pitch: 50,                 // inclinação do mapa fora da navegação no modo 3D
+    // relevo: dados de altitude abertos e gratuitos (os mesmos do exemplo oficial do MapLibre)
+    terrainUrl: 'https://tiles.mapterhorn.com/tilejson.json',
+    exaggeration: 1.3,         // exagero do relevo (1 = real)
+    destMinZoom: 15,           // abaixo disso os prédios nem aparecem no mapa
+  },
 
   // Layout: as mesmas condições estão nos @media do css/app.css (CSS não lê variáveis
   // em media queries). Se mudar aqui, mude lá também.

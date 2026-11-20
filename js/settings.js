@@ -6,6 +6,15 @@ const DEFAULTS = {
   abbreviate: true,       // R., Av., Dr.… na placa
   voice: true,            // instruções faladas
   autoCollapse: true,     // card da navegação recolhe sozinho com o celular deitado
+  // Visual do mapa
+  mapMode: 'flat',        // flat (plano, como sempre foi) | 3d
+  b3dBuildings: true,     // no 3D: prédios com a altura do OSM
+  b3dTerrain: true,       // no 3D: relevo (morros e serras) com sombreamento
+  b3dSky: true,           // no 3D: céu no horizonte
+  b3dDest: true,          // no 3D: prédio do lugar/destino em destaque
+  b3dRoute: false,        // no 3D: parede de luz ao longo da rota
+  arrow: 'ball3d',        // no 3D: seta da navegação — ball (bolinha de sempre) | waze (A) | ball3d (B)
+  lowBatteryFlat: true,   // volta ao plano com a bateria abaixo de 20% (fora da tomada)
 };
 
 export function getSetting(key) {

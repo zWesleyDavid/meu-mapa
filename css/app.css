@@ -232,6 +232,9 @@ svg { flex: none; }
 .map-fabs { position: fixed; z-index: 12; right: 16px; bottom: calc(var(--sheet-h) + 16px + var(--safe-bottom)); display: flex; flex-direction: column; gap: 10px; transition: bottom .28s cubic-bezier(.2,.8,.2,1); }
 .fab { width: 48px; height: 48px; border-radius: 16px; border: var(--card-border); background: var(--surface); color: var(--text); box-shadow: var(--shadow); display: grid; place-items: center; }
 .fab svg { width: 22px; height: 22px; }
+.fab-txt { font: 700 15px var(--font, inherit); letter-spacing: .02em; }
+.nav-puck3d { width: 104px; height: 104px; pointer-events: none; }
+.nav-puck3d svg { display: block; overflow: visible; }
 .fab.accent { color: var(--puck); }
 :root[data-theme="dark"] .fab.accent { color: var(--accent); }
 .fab .fill { fill: var(--danger); stroke: none; }
@@ -306,6 +309,21 @@ svg { flex: none; }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .set-title { font-size: 15px; font-weight: 600; }
 .set-sub { font-size: 13px; color: var(--text-2); margin-top: 2px; line-height: 1.35; }
+.mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 6px; }
+.mode-card { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 16px; border: 2px solid var(--line, rgba(127,127,127,.25)); background: var(--surface-2); color: var(--text); text-align: left; min-height: 64px; }
+.mode-card[aria-pressed="true"] { border-color: var(--accent); }
+.mode-ico { flex: none; width: 52px; display: grid; }
+.mode-ico svg { width: 52px; height: 35px; }
+.mode-ico .mi-bg { fill: var(--bg); }
+.mode-ico .mi-road { stroke: var(--text-2); stroke-opacity: .35; stroke-width: 3; fill: none; }
+.mode-ico path.mi-road:not([d^="M0"]) { fill: var(--text-2); fill-opacity: .2; stroke: none; }
+.mode-ico .mi-bld { fill: var(--text-2); fill-opacity: .45; }
+.mode-ico .mi-edge { fill: none; stroke: var(--bg); stroke-width: 1; }
+.mode-ico .mi-route { fill: none; stroke: var(--route); stroke-width: 3; stroke-linecap: round; }
+.mode-txt { display: flex; flex-direction: column; min-width: 0; }
+.mode-txt b { font-size: 16px; }
+.mode-txt small { font-size: 12px; color: var(--text-2); }
+.set-note { margin: 4px 0 8px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); color: var(--text-2); font-size: 13px; }
 .set-seg { margin: 10px 0 4px; box-shadow: none; }
 .set-seg button { height: 40px; font: 600 14px var(--font); text-transform: none; }
 .switch { position: relative; width: 52px; height: 32px; flex: none; border-radius: 16px; border: 0; background: var(--surface-3); transition: background .25s; padding: 0; }

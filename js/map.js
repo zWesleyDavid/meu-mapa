@@ -3,6 +3,7 @@ import { CONFIG } from './config.js';
 import { bus } from './core.js';
 import { buildStyle, placeholderStyle } from './mapstyle.js';
 import { provideIcon } from './mapicons.js';
+import { corridor, pickBuilding, puckSVG } from './map3d.js';
 
 /* global maplibregl */
 export let map;
@@ -10,6 +11,11 @@ let routeData = { type: 'FeatureCollection', features: [] };
 let poiData = { type: 'FeatureCollection', features: [] };
 const markers = { place: null, origin: null, destination: null, user: null, puck: null };
 let routeLabels = [];
+// 3D: o que está ligado (vem de effective3D), coordenadas da rota em destaque e lugar em destaque
+let opts3d = { on: false, buildings: false, terrain: false, sky: false, dest: false, route: false, arrow: 'ball' };
+let wallCoords = null;
+const markerPlaces = { place: null, destination: null };
+let extrusionDefaults = {}; // opacidade original das camadas de prédios do estilo, para voltar ao plano
 
 export function initMap(theme) {
   map = new maplibregl.Map({
@@ -26,7 +32,9 @@ export function initMap(theme) {
   map.on('style.load', addLayers);
   map.on('load', () => bus.emit('map:ready', map));
   setTheme(theme);
-  map.on('rotate', () => bus.emit('map:rotate', map.getBearing()));
+  map.on('rotate', () => { bus.emit('map:rotate', map.getBearing()); refreshPuck3D(); });
+  map.on('pitch', refreshPuck3D);
+  map.on('idle', () => { if (dest3d.pending) tryPickDest(); });
   setupPointerGestures();
   return map;
 }
@@ -97,6 +105,21 @@ function addLayers() {
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: { 'line-color': cssVar('--route'), 'line-width': width(5, 10) },
   });
+  // 3D: parede de luz da rota e prédio do destino (vazios até serem ligados)
+  map.addSource('mm-wall', { type: 'geojson', data: EMPTY });
+  map.addSource('mm-dest', { type: 'geojson', data: EMPTY });
+  map.addLayer({
+    id: 'mm-wall-3d', type: 'fill-extrusion', source: 'mm-wall',
+    paint: { 'fill-extrusion-color': cssVar('--route'), 'fill-extrusion-height': 5, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.35 },
+  });
+  map.addLayer({
+    id: 'mm-dest-3d', type: 'fill-extrusion', source: 'mm-dest',
+    paint: { 'fill-extrusion-color': cssVar('--route'), 'fill-extrusion-height': ['get', 'h'], 'fill-extrusion-base': ['get', 'b'], 'fill-extrusion-opacity': 0.95 },
+  });
+  extrusionDefaults = {};
+  for (const l of map.getStyle().layers) {
+    if (l.type === 'fill-extrusion' && !l.id.startsWith('mm-')) extrusionDefaults[l.id] = { opacity: map.getPaintProperty(l.id, 'fill-extrusion-opacity'), visibility: map.getLayoutProperty(l.id, 'visibility') };
+  }
   const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
   map.addLayer({
     id: 'pois', type: 'symbol', source: 'pois',
@@ -108,6 +131,7 @@ function addLayers() {
     },
   });
 
+  apply3D({});
   if (!addLayers.bound) {
     addLayers.bound = true;
     for (const id of ['route-alt', 'pois']) {
@@ -125,6 +149,7 @@ export function drawRoutes(routes, selected, { labels = true } = {}) {
       .sort((a, b) => Number(a.properties.selected) - Number(b.properties.selected)),
   };
   map.getSource('routes')?.setData(routeData);
+  setWall(routes[selected]?.geometry.coordinates || null);
   routeLabels.forEach((m) => m.remove());
   routeLabels = [];
   if (!labels) return;
@@ -151,6 +176,7 @@ export function drawNavProgress(coords, idx, point) {
   if (rest.length >= 2) feats.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: rest }, properties: { idx: 0, selected: true } });
   routeData = { type: 'FeatureCollection', features: feats };
   map.getSource('routes')?.setData(routeData);
+  setWall(rest.length >= 2 ? rest : null);
 }
 
 export function drawPois(places, cat = 'default') {
@@ -167,6 +193,7 @@ function div(cls) { const d = document.createElement('div'); d.className = cls; 
 export function setMarker(kind, place) {
   markers[kind]?.remove();
   markers[kind] = null;
+  if (kind in markerPlaces) { markerPlaces[kind] = place && !place.isUser ? place : null; setDestTarget(markerPlaces.destination || markerPlaces.place); }
   if (!place || place.isUser) return;
   const element = div(kind === 'origin' ? 'origin-pin' : 'dest-pin');
   markers[kind] = new maplibregl.Marker({ element }).setLngLat([place.lng, place.lat]).addTo(map);
@@ -201,14 +228,127 @@ export function setUserHeading(deg) {
   if (deg != null) markers.user.setRotation(deg);
 }
 
+let puckState = null; // { style, lngLat, bearing, drawn }
 export function setPuck(lngLat, bearingDeg) {
-  if (!lngLat) { markers.puck?.remove(); markers.puck = null; return; }
+  const style = opts3d.arrow;
+  if (!lngLat || (puckState && puckState.style !== style)) { markers.puck?.remove(); markers.puck = null; puckState = null; }
+  if (!lngLat) return;
   if (!markers.puck) {
-    const e = div('nav-puck');
-    e.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 19-8-4.5L4 21z"/></svg>';
-    markers.puck = new maplibregl.Marker({ element: e, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(lngLat).addTo(map);
+    if (style === 'ball') {
+      const e = div('nav-puck');
+      e.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l8 19-8-4.5L4 21z"/></svg>';
+      markers.puck = new maplibregl.Marker({ element: e, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(lngLat).addTo(map);
+    } else {
+      // seta 3D: desenhada de frente para a tela, conforme o rumo e a inclinação do mapa
+      markers.puck = new maplibregl.Marker({ element: div('nav-puck3d'), rotationAlignment: 'viewport', pitchAlignment: 'viewport' }).setLngLat(lngLat).addTo(map);
+    }
+    puckState = { style, drawn: null };
   }
-  markers.puck.setLngLat(lngLat).setRotation(bearingDeg || 0);
+  puckState.lngLat = lngLat;
+  puckState.bearing = bearingDeg || 0;
+  markers.puck.setLngLat(lngLat);
+  if (style === 'ball') markers.puck.setRotation(puckState.bearing);
+  else refreshPuck3D();
+}
+
+function refreshPuck3D() {
+  if (!puckState || puckState.style === 'ball' || !markers.puck) return;
+  const rel = Math.round((((puckState.bearing - map.getBearing()) % 360) + 360) % 360);
+  const pitch = Math.round(map.getPitch() / 2) * 2;
+  const key = `${rel}|${pitch}|${document.documentElement.dataset.theme}`;
+  if (puckState.drawn === key) return;
+  puckState.drawn = key;
+  markers.puck.getElement().innerHTML = puckSVG(puckState.style, rel, pitch, { color: cssVar('--puck', '#C8FF3D'), ink: puckInk() });
+}
+const puckInk = () => (document.documentElement.dataset.theme === 'dark' ? '#0B0D10' : '#0E2A47');
+
+// ---------------- 3D ----------------
+const EMPTY = { type: 'FeatureCollection', features: [] };
+const dest3d = { target: null, pending: false, tries: 0 };
+
+/** Liga/desliga as partes do 3D (objeto de effective3D). */
+export function set3D(next) {
+  const prev = opts3d;
+  opts3d = next;
+  bus.emit('map3d:changed', next);
+  if (map?.getSource('mm-wall')) apply3D(prev);
+  if (puckState && puckState.style !== next.arrow && puckState.lngLat) setPuck(puckState.lngLat, puckState.bearing);
+}
+
+/** Inclinação "em repouso" (fora da navegação): 3D inclina, plano fica de cima. */
+export const is3D = () => opts3d.on;
+export const restingPitch = () => (opts3d.on ? CONFIG.map3d.pitch : 0);
+
+function apply3D(prev) {
+  const o = opts3d;
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  // prédios do estilo
+  for (const [id, def] of Object.entries(extrusionDefaults)) {
+    if (!map.getLayer(id)) continue;
+    if (o.buildings) { map.setLayoutProperty(id, 'visibility', 'visible'); map.setPaintProperty(id, 'fill-extrusion-opacity', 0.9); }
+    else if (o.on) map.setLayoutProperty(id, 'visibility', 'none');
+    else { map.setLayoutProperty(id, 'visibility', def.visibility || 'visible'); map.setPaintProperty(id, 'fill-extrusion-opacity', def.opacity ?? 1); }
+  }
+  // relevo + sombreamento
+  if (o.terrain) {
+    if (!map.getSource('mm-dem')) map.addSource('mm-dem', { type: 'raster-dem', url: CONFIG.map3d.terrainUrl });
+    if (!map.getSource('mm-hs')) map.addSource('mm-hs', { type: 'raster-dem', url: CONFIG.map3d.terrainUrl });
+    if (!map.getLayer('mm-hillshade')) {
+      const before = map.getStyle().layers.find((l) => l.type === 'line' || l.type === 'symbol' || l.type === 'fill-extrusion')?.id;
+      map.addLayer({
+        id: 'mm-hillshade', type: 'hillshade', source: 'mm-hs',
+        paint: theme === 'dark'
+          ? { 'hillshade-shadow-color': '#04060A', 'hillshade-highlight-color': '#2E3948', 'hillshade-accent-color': '#0A0D12', 'hillshade-exaggeration': 0.45 }
+          : { 'hillshade-shadow-color': '#7F93A6', 'hillshade-highlight-color': '#FFFFFF', 'hillshade-accent-color': '#A9B8C6', 'hillshade-exaggeration': 0.35 },
+      }, before);
+    }
+    map.setTerrain({ source: 'mm-dem', exaggeration: CONFIG.map3d.exaggeration });
+  } else if (prev.terrain || map.getTerrain?.()) {
+    map.setTerrain(null);
+    if (map.getLayer('mm-hillshade')) map.removeLayer('mm-hillshade');
+  }
+  // céu no horizonte (MapLibre 4.5+); desligado = mesma cor do fundo, como antes
+  if (map.setSky && (o.sky || prev.sky)) {
+    const bg = cssVar('--bg', '#101317');
+    map.setSky(o.sky
+      ? (theme === 'dark'
+        ? { 'sky-color': '#0A0D12', 'horizon-color': '#22324A', 'fog-color': '#1C2738', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.85 }
+        : { 'sky-color': '#9CC3E6', 'horizon-color': '#E8F1F8', 'fog-color': '#E6EDF3', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.85 })
+      : { 'sky-color': bg, 'horizon-color': bg, 'fog-color': bg, 'fog-ground-blend': 1 });
+  }
+  map.getSource('mm-wall')?.setData(o.route && wallCoords ? corridor(wallCoords) : EMPTY);
+  if (o.dest) { if (dest3d.target) { dest3d.pending = true; dest3d.tries = 0; tryPickDest(); } }
+  else map.getSource('mm-dest')?.setData(EMPTY);
+}
+
+function setWall(coords) {
+  wallCoords = coords;
+  if (opts3d.route) map?.getSource('mm-wall')?.setData(coords ? corridor(coords) : EMPTY);
+}
+
+function setDestTarget(place) {
+  if (dest3d.target?.id === place?.id && dest3d.target?.lng === place?.lng) return;
+  dest3d.target = place || null;
+  dest3d.tries = 0;
+  map?.getSource('mm-dest')?.setData(EMPTY);
+  dest3d.pending = !!place && opts3d.dest;
+  if (dest3d.pending) tryPickDest();
+}
+
+/** Procura o prédio sob o lugar entre os prédios desenhados; tenta de novo quando o mapa para. */
+function tryPickDest() {
+  const t = dest3d.target;
+  if (!t || !opts3d.dest || !map.getSource('mm-dest')) { dest3d.pending = false; return; }
+  if (map.getZoom() < CONFIG.map3d.destMinZoom) return; // espera aproximar
+  const layers = map.getStyle().layers.filter((l) => l['source-layer'] === 'building' && map.getLayoutProperty(l.id, 'visibility') !== 'none').map((l) => l.id);
+  if (!layers.length) { dest3d.pending = false; return; }
+  const p = map.project([t.lng, t.lat]);
+  const feats = map.queryRenderedFeatures([[p.x - 40, p.y - 40], [p.x + 40, p.y + 40]], { layers });
+  const b = pickBuilding(feats, [t.lng, t.lat]);
+  if (b) {
+    map.getSource('mm-dest').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: b.geometry, properties: { h: b.height + 0.6, b: b.base } }] });
+    dest3d.pending = false;
+  } else if (++dest3d.tries >= 4) dest3d.pending = false; // lugar sem prédio mapeado
 }
 
 // ---------------- Câmera ----------------
@@ -268,7 +408,7 @@ export function flyToPlace(place) {
     const [w, s, e, n] = place.bbox;
     fitSafe([[w, s], [e, n]], { maxZoom: 17 });
   } else {
-    map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(map.getZoom(), 16), padding: viewPadding(), duration: 900 });
+    map.flyTo({ center: [place.lng, place.lat], zoom: Math.max(map.getZoom(), 16), padding: viewPadding(), duration: 900, ...(opts3d.on ? { pitch: CONFIG.map3d.pitch } : {}) });
   }
 }
 
@@ -291,7 +431,7 @@ export function followCamera(lngLat, bearingDeg, zoom, pitch = CONFIG.nav.pitch)
   });
 }
 
-export function resetNorth() { map.easeTo({ bearing: 0, pitch: 0, duration: 500 }); }
+export function resetNorth() { map.easeTo({ bearing: 0, pitch: restingPitch(), duration: 500 }); }
 
 // ---------------- Toque longo / clique direito / cliques ----------------
 function setupPointerGestures() {

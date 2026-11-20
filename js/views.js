@@ -251,6 +251,12 @@ export function stepsList(steps, onStep) {
 }
 
 // ---------------- Ajustes ----------------
+// Miniaturas das opções "Plano" e "3D" nos ajustes
+const MODE_ICON = {
+  flat: '<svg viewBox="0 0 48 32"><rect width="48" height="32" rx="4" class="mi-bg"/><path d="M0 11h48M0 23h48M16 0v32M34 0v32" class="mi-road"/><path d="M25 32V11h23" class="mi-route"/></svg>',
+  '3d': '<svg viewBox="0 0 48 32"><rect width="48" height="32" rx="4" class="mi-bg"/><path d="M4 26 18 20 44 26 30 32z" class="mi-road"/><path d="M8 22V10l6-3 6 3v12l-6 3z" class="mi-bld"/><path d="M8 10l6 3 6-3M14 13v12" class="mi-edge"/><path d="M27 23V6l5-2.5L37 6v17l-5 2.5z" class="mi-bld"/><path d="M27 6l5 2.5L37 6M32 8.5v17" class="mi-edge"/><path d="M22 30 40 26" class="mi-route"/></svg>',
+};
+
 export function settingsView({ values, version, onChange, onClose }) {
   const sw = (key, title, sub) => el('div', { class: 'set-row' },
     el('div', { class: 'set-txt' }, el('div', { class: 'set-title' }, title), sub ? el('div', { class: 'set-sub' }, sub) : null),
@@ -267,6 +273,26 @@ export function settingsView({ values, version, onChange, onClose }) {
     ),
     el('div', { class: 'seg set-seg', role: 'group', 'aria-label': 'Tema' },
       themes.map(([v, label]) => el('button', { 'aria-pressed': String(values.theme === v), onclick: () => onChange('theme', v) }, label))),
+    el('div', { class: 'section-title' }, 'Visual do mapa'),
+    el('div', { class: 'mode-cards', role: 'group', 'aria-label': 'Visual do mapa' },
+      [['flat', 'Plano', 'Como sempre foi', MODE_ICON.flat], ['3d', '3D', 'Prédios e relevo', MODE_ICON['3d']]].map(([v, label, sub, ico]) =>
+        el('button', { class: 'mode-card', 'aria-pressed': String(values.mapMode === v), onclick: () => onChange('mapMode', v) },
+          el('span', { class: 'mode-ico', 'aria-hidden': 'true', ...h(ico) }),
+          el('span', { class: 'mode-txt' }, el('b', {}, label), el('small', {}, sub))))),
+    values.lowBattery ? el('div', { class: 'set-note' }, 'Bateria fraca: mostrando o mapa plano até carregar.') : null,
+    ...(values.mapMode === '3d' ? [
+      el('div', { class: 'section-title' }, 'No modo 3D, mostrar'),
+      sw('b3dBuildings', 'Prédios em 3D', 'Altura dos prédios do OpenStreetMap'),
+      sw('b3dTerrain', 'Relevo', 'Morros e serras em 3D, com sombreamento (usa mais dados)'),
+      sw('b3dSky', 'Céu no horizonte', 'Em vez do fundo vazio quando o mapa inclina'),
+      sw('b3dDest', 'Destino em destaque', 'O prédio do lugar escolhido sobe na cor do app'),
+      sw('b3dRoute', 'Rota em 3D', 'Parede de luz ao longo do caminho'),
+      el('div', { class: 'set-row' }, el('div', { class: 'set-txt' }, el('div', { class: 'set-title' }, 'Seta na navegação'))),
+      el('div', { class: 'seg set-seg', role: 'group', 'aria-label': 'Seta na navegação' },
+        [['ball', 'Bolinha'], ['waze', 'A · Seta 3D'], ['ball3d', 'B · Bolinha 3D']].map(([v, label]) =>
+          el('button', { 'aria-pressed': String(values.arrow === v), onclick: () => onChange('arrow', v) }, label))),
+      sw('lowBatteryFlat', 'Plano com bateria fraca', 'Abaixo de 20% e fora da tomada, volta ao plano para economizar'),
+    ] : []),
     el('div', { class: 'section-title' }, 'Navegação'),
     sw('abbreviate', 'Abreviar nomes na placa', 'R., Av., Serv., Dr.… Ex.: R. Dep. Otacílio Costa'),
     sw('voice', 'Instruções por voz', 'Fala as manobras e a faixa a usar'),

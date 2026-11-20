@@ -15,6 +15,7 @@ import { setSheet, measurePeek } from './sheet.js';
 import { startPick, cancelPick, setSearchText, addRecent, isSaved, toggleSaved } from './search-ui.js';
 import { placeView, poiListView, routeTopView, directionsView, settingsView } from './views.js';
 import { getSetting, setSetting } from './settings.js';
+import { effective3D } from './map3d.js';
 
 const body = $('#sheet-body');
 const MAX_STOPS = 3;
@@ -40,8 +41,39 @@ const resolvedTheme = () => { const t = getSetting('theme'); return t === 'auto'
 systemDark.addEventListener('change', () => { if (getSetting('theme') === 'auto') applyTheme(resolvedTheme()); });
 bus.on('settings:changed', ({ key }) => {
   if (key === 'theme') applyTheme(resolvedTheme());
+  if (KEYS_3D.includes(key)) apply3D();
   if (state.view === 'settings') showSettings();
 });
+
+// ---------------- 3D (Ajustes › Visual do mapa) ----------------
+const KEYS_3D = ['mapMode', 'b3dBuildings', 'b3dTerrain', 'b3dSky', 'b3dDest', 'b3dRoute', 'arrow', 'lowBatteryFlat'];
+let battery = null; // { level, charging } quando o navegador informa (Chrome/Android)
+let view3d = null;
+function apply3D() {
+  const next = effective3D(Object.fromEntries(KEYS_3D.map((k) => [k, getSetting(k)])), battery);
+  const changed = view3d && view3d.on !== next.on;
+  view3d = next;
+  M.set3D(next);
+  // inclina ao entrar no 3D e volta a olhar de cima ao sair (a navegação cuida da própria câmera)
+  if (changed && !isNavigating()) M.map.easeTo({ pitch: M.restingPitch(), duration: 700 });
+}
+const btn3d = $('#btn-3d');
+btn3d.addEventListener('click', () => {
+  if (getSetting('mapMode') === '3d' && !M.is3D()) { toast('Bateria fraca: o 3D volta quando carregar (dá para mudar em Ajustes).', 3500); return; }
+  setSetting('mapMode', M.is3D() ? 'flat' : '3d');
+});
+bus.on('map3d:changed', (o) => { btn3d.textContent = o.on ? '2D' : '3D'; btn3d.setAttribute('aria-label', o.on ? 'Mapa plano' : 'Mapa em 3D'); });
+navigator.getBattery?.().then((b) => {
+  const update = () => {
+    battery = { level: b.level, charging: b.charging };
+    const was = view3d?.lowBattery;
+    apply3D();
+    if (was !== view3d.lowBattery && state.view === 'settings') showSettings();
+  };
+  b.addEventListener('levelchange', update);
+  b.addEventListener('chargingchange', update);
+  update();
+}).catch(() => { /* sem informação de bateria: segue sem a regra */ });
 
 // ---------------- Ajustes ----------------
 $('#settings-btn').addEventListener('click', () => (state.view === 'settings' ? closeSettings() : showSettings()));
@@ -54,7 +86,10 @@ function showSettings() {
   setMode('settings');
   markChip(null);
   const node = settingsView({
-    values: { theme: getSetting('theme'), abbreviate: getSetting('abbreviate'), voice: getSetting('voice'), autoCollapse: getSetting('autoCollapse') },
+    values: {
+      theme: getSetting('theme'), abbreviate: getSetting('abbreviate'), voice: getSetting('voice'), autoCollapse: getSetting('autoCollapse'),
+      ...Object.fromEntries(KEYS_3D.map((k) => [k, getSetting(k)])), lowBattery: !!view3d?.lowBattery,
+    },
     version: CONFIG.version,
     onChange: (key, value) => setSetting(key, value),
     onClose: closeSettings,
@@ -72,6 +107,8 @@ function closeSettings() {
 
 applyTheme(resolvedTheme(), false);
 M.initMap(theme);
+apply3D();
+if (view3d.on) M.map.setPitch(M.restingPitch());
 state.profile = store.get('profile', CONFIG.routing.defaultProfile);
 
 function redrawMapContent() {
@@ -406,7 +443,7 @@ function startNavigation() {
   startNav({
     route, profile: state.profile, destination: state.destination, stops: state.stops.slice(), simulate,
     onEnd: () => {
-      M.map.easeTo({ pitch: 0, bearing: 0, duration: 400 });
+      M.map.easeTo({ pitch: M.restingPitch(), bearing: 0, duration: 400 });
       if (state.destination) {
         showDirections({ sheetState: 'half' });
         M.drawRoutes(state.routes, state.selectedRoute);
