@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { $, bus, state, store, el, toast } from './core.js';
 import { icon } from './icons.js';
 import * as M from './map.js';
-import { prepareRoute, snap, pointAt, distance } from './geo.js';
+import { prepareRoute, snap, pointAt, distance, simSpeed } from './geo.js';
 import { getRoutes } from './routing.js';
 import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
@@ -451,13 +451,18 @@ document.addEventListener('visibilitychange', () => {
 function startSimulation() {
   if (!nav) return;
   stopSimulation();
-  const speed = CONFIG.routing.profiles[nav.profile]?.simSpeed || 12;
+  const cfg = CONFIG.routing.profiles[nav.profile];
   let along = nav.progress || 0;
+  let speed = null;
+  let prep = nav.prep;
   pauseLocationEvents(true);
   nav.sim = setInterval(() => {
     if (!nav) return;
+    if (nav.prep !== prep) { prep = nav.prep; along = nav.progress || 0; } // rota recalculada
+    // velocidade de cada trecho como prevista pelo servidor de rotas, freando antes das curvas
+    speed = simSpeed(prep, along, speed, cfg);
     along += speed;
-    const { point, bearing: b } = pointAt(nav.prep, along);
+    const { point, bearing: b } = pointAt(prep, along);
     onPosition({ lng: point[0], lat: point[1], accuracy: 5, speed, heading: b });
   }, 1000);
 }

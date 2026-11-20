@@ -155,3 +155,10 @@ test('getRoutes: servidor travado → desiste no tempo máximo, sem guardar no c
     CONFIG.routing.timeoutMs = saved;
   }
 });
+
+test('cleanSteps: ao juntar um passo curto, soma também o tempo', () => {
+  const out = cleanSteps([{ type: 'turn', leg: 0, distance: 100, duration: 10 }, { type: 'new name', leg: 0, distance: 20, duration: 3 }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].distance, 120);
+  assert.equal(out[0].duration, 13);
+});

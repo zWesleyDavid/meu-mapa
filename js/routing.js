@@ -189,7 +189,7 @@ export function cleanSteps(steps) {
   for (const s of steps) {
     if (s.type === 'depart' && s.leg > 0) continue; // a partida depois de cada parada é redundante
     const prev = out[out.length - 1];
-    if (prev && s.type === 'new name' && s.distance < 30) { prev.distance += s.distance; continue; }
+    if (prev && s.type === 'new name' && s.distance < 30) { prev.distance += s.distance; prev.duration = (prev.duration || 0) + (s.duration || 0); continue; }
     out.push({ ...s });
   }
   return out;

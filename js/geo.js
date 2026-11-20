@@ -87,3 +87,34 @@ export function pointAt(prep, along) {
   const n = coords.length;
   return { point: coords[n - 1], bearing: bearing(coords[n - 2] || coords[n - 1], coords[n - 1]) };
 }
+
+// ---------------- Velocidade da simulação ----------------
+// Manobras em que dá para seguir sem frear (o resto pede redução antes do ponto).
+const NO_SLOWDOWN = new Set(['depart', 'continue', 'new name', 'notification', 'merge', 'on ramp', 'off ramp', 'fork']);
+
+/**
+ * Velocidade (m/s) da simulação em `along` metros: a média prevista pelo servidor de rotas
+ * para o trecho atual (distância ÷ tempo do passo), freando antes de curvas e da chegada
+ * e acelerando aos poucos depois. `prev` é a velocidade do segundo anterior.
+ * `cfg`: { simSpeed (reserva), sim: { min, max, turn } } do perfil (config.js).
+ */
+export function simSpeed(prep, along, prev, cfg, dt = 1) {
+  const { min = 3, max = 30, turn = 6 } = cfg?.sim || {};
+  const fallback = cfg?.simSpeed || 12;
+  const steps = prep.steps || [];
+  let i = 0;
+  while (i + 1 < steps.length && steps[i + 1].at <= along) i++;
+  const cur = steps[i];
+  const avg = cur && cur.duration > 0 && cur.distance > 0 ? cur.distance / cur.duration : fallback;
+  let target = Math.min(max, Math.max(min, avg));
+  // frear antes da próxima manobra (curva, rotatória, chegada): v² = v_curva² + 2·a·d
+  const next = steps.slice(i + 1).find((s) => !NO_SLOWDOWN.has(s.type));
+  if (next) {
+    const d = Math.max(0, next.at - along);
+    const vIn = next.type === 'arrive' ? min : turn;
+    target = Math.min(target, Math.sqrt(vIn * vIn + 2 * 1.6 * d));
+  }
+  const p = prev ?? Math.min(target, turn);
+  // aceleração e frenagem suaves (≈ 2 m/s² para ganhar, 3 m/s² para perder)
+  return Math.max(Math.min(target, p + 2 * dt), p - 3 * dt, 0.5);
+}

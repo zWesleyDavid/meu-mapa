@@ -1,7 +1,8 @@
 // Geometria da navegação (js/geo.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { distance, bearing, prepareRoute, snap, pointAt } from '../js/geo.js';
+import { distance, bearing, prepareRoute, snap, pointAt, simSpeed } from '../js/geo.js';
+import { CONFIG } from '../js/config.js';
 
 const near = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''} esperado ${b} ± ${tol}, veio ${a}`);
 
@@ -58,4 +59,52 @@ test('pointAt: começo, meio, depois do fim', () => {
   assert.deepEqual(pointAt(p, -5).point, [0, 0]);
   near(pointAt(p, p.total / 2).point[0], 0.005, 1e-6);
   assert.deepEqual(pointAt(p, p.total + 100).point, [0.01, 0]);
+});
+
+// ---------------- velocidade da simulação ----------------
+const car = CONFIG.routing.profiles.car;
+// 3 km de avenida rápida (25 m/s previstos), curva à direita, 1 km de rua lenta (8 m/s), chegada
+const simRoute = {
+  steps: [
+    { type: 'depart', at: 0, distance: 3000, duration: 120 },
+    { type: 'turn', modifier: 'right', at: 3000, distance: 1000, duration: 125 },
+    { type: 'arrive', at: 4000, distance: 0, duration: 0 },
+  ],
+};
+const run = (from, to, start = null) => {
+  let v = start, along = from;
+  const seen = [];
+  while (along < to) { v = simSpeed(simRoute, along, v, car); along += v; seen.push({ along, v }); }
+  return seen;
+};
+
+test('simSpeed: acelera aos poucos até a velocidade prevista do trecho', () => {
+  const s = run(0, 1500);
+  assert.ok(s[0].v <= car.sim.turn + 2, 'não sai em disparada');
+  for (let i = 1; i < s.length; i++) assert.ok(s[i].v - s[i - 1].v <= 2 + 1e-9, 'no máximo +2 m/s por segundo');
+  near(s[s.length - 1].v, 25, 0.01, 'na avenida');
+});
+
+test('simSpeed: freia antes da curva e chega nela devagar', () => {
+  const s = run(0, 3000, null);
+  const atTurn = s.find((x) => x.along >= 2990) || s[s.length - 1];
+  assert.ok(atTurn.v <= car.sim.turn + 3.5, `velocidade na curva ${atTurn.v}`);
+  for (let i = 1; i < s.length; i++) assert.ok(s[i - 1].v - s[i].v <= 3 + 1e-9, 'no máximo −3 m/s por segundo');
+});
+
+test('simSpeed: rua lenta depois da curva e parada suave na chegada', () => {
+  const s = run(3005, 4000, car.sim.turn);
+  const mid = s.find((x) => x.along > 3400);
+  near(mid.v, 8, 0.01, 'rua lenta');
+  assert.ok(s[s.length - 1].v <= car.sim.min + 2.5, 'chega devagar');
+});
+
+test('simSpeed: respeita mínimo e máximo do perfil e usa a reserva sem tempo previsto', () => {
+  const fast = { steps: [{ type: 'depart', at: 0, distance: 10000, duration: 100 }] }; // 100 m/s
+  assert.equal(simSpeed(fast, 0, 29.5, car), car.sim.max, 'chega ao máximo e não passa');
+  assert.equal(simSpeed(fast, 0, car.sim.max, car), car.sim.max);
+  const noDur = { steps: [{ type: 'depart', at: 0, distance: 10000, duration: 0 }] };
+  assert.equal(simSpeed(noDur, 0, car.simSpeed, car), car.simSpeed);
+  const foot = CONFIG.routing.profiles.foot;
+  assert.ok(simSpeed(fast, 0, 1.8, foot) <= foot.sim.max);
 });

@@ -1,7 +1,7 @@
 // Configuração central. Troque provedores aqui sem mexer no resto do código.
 export const CONFIG = {
   appName: 'Meu Mapa',
-  version: '18',  // suba junto com o VERSION do sw.js
+  version: '19',  // suba junto com o VERSION do sw.js
 
   // Vista inicial antes de achar sua localização (Brasil inteiro).
   initialView: { center: [-51.9, -14.2], zoom: 3.6 },
@@ -31,9 +31,9 @@ export const CONFIG = {
   // suba seu próprio OSRM/Valhalla e troque as URLs abaixo.
   routing: {
     profiles: {
-      car:  { label: 'Carro', url: 'https://routing.openstreetmap.de/routed-car/route/v1/driving/',  simSpeed: 13 },
-      bike: { label: 'Bike',  url: 'https://routing.openstreetmap.de/routed-bike/route/v1/driving/', simSpeed: 5.5 },
-      foot: { label: 'A pé',  url: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/', simSpeed: 3 },
+      car:  { label: 'Carro', url: 'https://routing.openstreetmap.de/routed-car/route/v1/driving/',  simSpeed: 13, sim: { min: 4, max: 30, turn: 7 } },
+      bike: { label: 'Bike',  url: 'https://routing.openstreetmap.de/routed-bike/route/v1/driving/', simSpeed: 5.5, sim: { min: 2, max: 8, turn: 3 } },
+      foot: { label: 'A pé',  url: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/', simSpeed: 3, sim: { min: 1, max: 1.8, turn: 1.2 } },
     },
     defaultProfile: 'car',
     timeoutMs: 15000,    // rotas longas podem levar alguns segundos
