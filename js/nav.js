@@ -96,7 +96,8 @@ function buildUI() {
   ui.recenter = el('button', { class: 'nav-recenter', hidden: true, onclick: () => setFollowing(true), html: `${icon('locate')}<span>Recentralizar</span>` });
 
   ui.speedVal = el('b', {}, '–');
-  ui.speed = el('div', { class: 'nav-speed', 'aria-label': 'Velocidade atual' }, ui.speedVal, el('span', {}, 'km/h'));
+  ui.speedUnit = el('span', {}, 'km/h');
+  ui.speed = el('div', { class: 'nav-speed', 'aria-label': 'Velocidade atual' }, ui.speedVal, ui.speedUnit);
 
   ui.etaMain = el('b', {}, '–');
   ui.etaSub = el('span', { class: 'eta-sub' }, '');
@@ -192,6 +193,8 @@ function toggleMenu() {
     item('list', 'Passo a passo', showSteps),
     nav.sim ? item('close', 'Parar simulação', () => { stopSimulation(); toast('Simulação parada. Usando o GPS.'); })
       : item('play', 'Simular viagem', () => { startSimulation(); toast('Simulando a viagem pela rota'); }),
+    nav.sim ? el('button', { class: 'nav-menu-rate', onclick: cycleSimRate, 'aria-label': `Velocidade da simulação: ${simRate} vezes. Toque para mudar` },
+      el('span', { class: 'rate-ico' }, `${simRate}×`), el('span', {}, 'Velocidade da simulação')) : null,
     el('div', { class: 'nav-menu-ver' }, `Versão ${CONFIG.version}`));
   root.append(ui.menu);
 }
@@ -448,6 +451,20 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ---------------- Simulação ----------------
+const SIM_RATES = [1, 2, 4];
+let simRate = 1; // vale até fechar o app
+
+/** 1× → 2× → 4× → 1×: acelera o "tempo" da simulação (a velocidade mostrada continua a do trecho). */
+function cycleSimRate() {
+  simRate = SIM_RATES[(SIM_RATES.indexOf(simRate) + 1) % SIM_RATES.length];
+  ui.menu?.querySelector('.nav-menu-rate .rate-ico')?.replaceChildren(`${simRate}×`);
+  updateSimBadge();
+  toast(simRate === 1 ? 'Simulação em tempo real' : `Simulação ${simRate}× mais rápida`);
+}
+function updateSimBadge() {
+  if (ui.speedUnit) ui.speedUnit.textContent = nav?.sim && simRate > 1 ? `km/h · ${simRate}×` : 'km/h';
+}
+
 function startSimulation() {
   if (!nav) return;
   stopSimulation();
@@ -460,14 +477,16 @@ function startSimulation() {
     if (!nav) return;
     if (nav.prep !== prep) { prep = nav.prep; along = nav.progress || 0; } // rota recalculada
     // velocidade de cada trecho como prevista pelo servidor de rotas, freando antes das curvas
-    speed = simSpeed(prep, along, speed, cfg);
-    along += speed;
+    speed = simSpeed(prep, along, speed, cfg, simRate);
+    along += speed * simRate;
     const { point, bearing: b } = pointAt(prep, along);
     onPosition({ lng: point[0], lat: point[1], accuracy: 5, speed, heading: b });
   }, 1000);
+  updateSimBadge();
 }
 
 function stopSimulation() {
   if (nav?.sim) { clearInterval(nav.sim); nav.sim = null; }
   pauseLocationEvents(false);
+  updateSimBadge();
 }

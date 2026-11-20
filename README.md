@@ -73,6 +73,7 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
   A velocidade segue a prevista pelo servidor de rotas para cada trecho (mais rápido em avenidas e rodovias,
   mais devagar em ruas locais), freando antes das curvas e da chegada.
+  No mesmo menu, "Velocidade da simulação" alterna 1×, 2× e 4× para testar trajetos longos mais rápido.
 - **Ajustes** (botão ao lado da busca): tema automático/claro/escuro, abreviar nomes na placa (R., Av., Serv., Dr.…), voz, recolher o painel sozinho
 - Setas de manobra próprias (`js/maneuvers.js`) e placa com a distância embaixo da seta
 - **Modo 3D** (Ajustes › Visual do mapa, ou o botão 2D/3D no mapa e na navegação). O padrão continua plano. Cada parte liga separada:
