@@ -1,9 +1,6 @@
 // Ícones de traço (24x24). O estilo (stroke/fill) vem do CSS do contêiner.
 const P = {
-  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
-  back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
-  swap: '<path d="M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4"/>',
   directions: '<path d="M5 19V12a3 3 0 0 1 3-3h11"/><path d="M15 5l4 4-4 4"/>',
   start: '<path class="solid" d="M12 2l8 19-8-4.5L4 21z"/>',
   bookmark: '<path class="bm" d="M6 3h12v18l-6-4-6 4z"/>',
@@ -13,8 +10,6 @@ const P = {
   history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
   pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
   locate: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>',
-  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
-  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   car: '<path d="M4 16l1.6-5.2A2 2 0 0 1 7.5 9.4h9a2 2 0 0 1 1.9 1.4L20 16v3H4z"/><path d="M7 19v1.5M17 19v1.5"/>',
   bike: '<circle cx="6" cy="16" r="3.5"/><circle cx="18" cy="16" r="3.5"/><path d="M6 16l4-7h5l3 7M10 9l3 7M13 6h3"/>',
   foot: '<circle cx="13" cy="4.5" r="1.8"/><path d="M10 21l2-6 3 3v3M8 12l3-4 3 1 2 3M12 15l-1-5"/>',
@@ -28,7 +23,6 @@ const P = {
   overview: '<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2z"/><path d="M9 4v14M15 6v14"/>',
   play: '<path d="M7 4l13 8-13 8z"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
-  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -38,19 +32,6 @@ const P = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
   chevron: '<path d="M6 9l6 6 6-6"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13 7l4 4"/>',
-  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
-  // Manobras
-  straight: '<path d="M12 21V4M6 10l6-6 6 6"/>',
-  right: '<path d="M6 21v-8a4 4 0 0 1 4-4h9"/><path d="M15 5l4 4-4 4"/>',
-  left: '<path d="M18 21v-8a4 4 0 0 0-4-4H5"/><path d="M9 5L5 9l4 4"/>',
-  'slight-right': '<path d="M9 21v-7l8-8"/><path d="M11 6h6v6"/>',
-  'slight-left': '<path d="M15 21v-7L7 6"/><path d="M13 6H7v6"/>',
-  'sharp-right': '<path d="M7 21V7l10 10"/><path d="M17 11v6h-6"/>',
-  'sharp-left': '<path d="M17 21V7L7 17"/><path d="M7 11v6h6"/>',
-  uturn: '<path d="M8 21V9a4 4 0 0 1 8 0v4"/><path d="M12 10l4 4 4-4"/>',
-  roundabout: '<path d="M12 22v-5a5 5 0 1 1 5-5h4"/><path d="M18 9l3 3-3 3"/>',
-  depart: '<circle cx="12" cy="12" r="4"/><path d="M12 2v4"/>',
-  arrive: '<path d="M6 21V4M6 4h11l-2 4 2 4H6"/>',
 };
 
 export function icon(name, cls = '') {

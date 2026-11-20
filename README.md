@@ -19,8 +19,40 @@ Precisa de https. As formas mais rápidas:
 
 No celular, use "Adicionar à tela inicial" para instalar como app.
 
+## Testes
+
+Testes automáticos com o executor nativo do Node.js (`node --test`), **sem instalar nada**:
+nenhuma dependência, nenhum `npm install`. O `package.json` existe só para o comando `npm test`.
+
+**Requisito:** Node.js 22 ou mais novo (`node --version`).
+
+```bash
+cd meu-mapa
+npm test                                   # todos os testes
+node --test "tests/**/*.test.js"           # o mesmo, sem npm
+node --test tests/geocoder.test.js         # um arquivo só
+node --test --test-reporter=spec "tests/**/*.test.js"   # saída mais legível
+```
+
+Os testes nunca acessam a internet: o `fetch` é trocado por respostas simuladas (`tests/helpers.js`).
+
+| Arquivo | O que verifica |
+|---|---|
+| `tests/fetch.test.js` | tempo máximo das chamadas, cancelamento, erros HTTP e de conexão |
+| `tests/geocoder.test.js` | busca: ordem por proximidade, duas consultas ao Photon, falhas e cancelamento |
+| `tests/routing.test.js` | instruções em português, paradas, cache e mensagens de erro do OSRM |
+| `tests/places.test.js` | junção de resultados por categoria, servidores reserva do Overpass, detalhes do lugar (inclusive links seguros) |
+| `tests/junction.test.js` | faixas e visão da junção (inclusive nomes com HTML escapados) |
+| `tests/hours.test.js` | horário de funcionamento: aberto/fechado, madrugada, formatos não entendidos |
+| `tests/settings.test.js` | preferências e abreviações (R., Av., Dr.…) |
+| `tests/format.test.js`, `tests/geo.test.js` | distâncias, tempos e geometria da navegação |
+| `tests/project.test.js` | consistência: todo módulo está no cache offline do `sw.js`, versões iguais, arquivos e imports existentes |
+
+Ao criar um módulo novo em `js/`, coloque-o também no `SHELL` do `sw.js` (o teste avisa se esquecer).
+Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js` juntos (o teste confere).
+
 ## O que já faz
-- Visual próprio: tema escuro (limão) e claro (azul-marinho + coral), seguindo o sistema ou pelo botão
+- Visual próprio: tema escuro (limão) e claro (azul-marinho + coral), seguindo o sistema ou escolhido em Ajustes
 - Topo em estilo de sinalização de trânsito nas rotas e na navegação
 - Mapa com estilo próprio nos dois temas: avenidas em maiúsculas espaçadas, bairros espaçados, escudo de rodovia, nomes mais cedo e maiores, números das casas (`js/mapstyle.js`)
 - Ícones próprios no estilo "Placa" (desenhados pelo app, `js/mapicons.js`): cor por grupo de categoria, pontinhos de longe e placa com nome de perto
@@ -49,8 +81,8 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 ```
 index.html            casco da página
 css/app.css           tema (variáveis CSS), layout responsivo
-js/config.js          provedores de mapa, busca e rotas: troque aqui
-js/core.js            barramento de eventos (bus), estado global, storage, helpers de DOM
+js/config.js          provedores, tempos máximos, categorias e layout: troque aqui
+js/core.js            barramento de eventos (bus), estado global, storage, helpers de DOM, fetchJSON
 js/map.js             tudo que toca o MapLibre (camadas, marcadores, câmera, gestos)
 js/geocoder.js        busca/geocodificação reversa (Photon) → formato Place
 js/routing.js         rotas (OSRM) + gerador de instruções em pt-BR
@@ -59,20 +91,31 @@ js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálcu
 js/junction.js        faixas: análise, barra e visão 2D da junção
 js/geo.js             geometria: distâncias, projeção na rota
 js/location.js        GPS do usuário
-js/places.js          categorias próximas (Overpass)
+js/places.js          categorias próximas (blocos do mapa + Overpass com servidores reserva)
+js/details.js         detalhes do lugar (etiquetas do OSM: contato, horário, comodidades)
+js/hours.js           horário de funcionamento (opening_hours)
 js/mapstyle.js        estilo do mapa (cores, densidade de nomes, números)
 js/compass.js         bússola do aparelho
 js/maneuvers.js       setas de manobra (haste + ponta sólida)
+js/mapicons.js        ícones do mapa desenhados no app (estilo "Placa")
+js/icons.js           ícones de traço da interface
+js/format.js          distância, tempo e horário em pt-BR
 js/settings.js        preferências e abreviação de nomes de ruas
 js/search-ui.js       caixa de busca, recentes, teclado
 js/views.js           renderização das telas do painel
 js/main.js            controlador: liga tudo
 sw.js                 service worker (cache do app, não dos mapas)
+tests/                testes automáticos (node --test)
+package.json          só para `npm test`; não há dependências nem build
 ```
 
 ### Eventos do `bus`
-`map:ready`, `map:click`, `map:longpress`, `map:userpan`, `position`, `position:error`,
-`place:chosen`, `search:cleared`, `route:select`.
+- Mapa: `map:ready`, `map:click`, `map:longpress`, `map:userpan`, `map:rotate`
+- Localização: `position`, `position:error`, `heading`
+- Busca e telas: `place:chosen`, `search:cleared`, `pick:cancel`, `category:open`, `route:select`
+- Navegação: `nav:rerouted`, `nav:ended`
+- Ajustes: `settings:changed`
+
 Novas funcionalidades devem escutar/emitir eventos em vez de importar umas às outras.
 No console: `meuMapa.state`, `meuMapa.map()`, `meuMapa.bus`.
 
@@ -83,5 +126,25 @@ No console: `meuMapa.state`, `meuMapa.map()`, `meuMapa.bus`.
 | Busca | Photon (Komoot) | Não usar para tráfego pesado |
 | Categorias | Overpass API | Uso justo, sem chave |
 | Rotas | OSRM da FOSSGIS (routing.openstreetmap.de) | Servidor de demonstração; para escala, subir o próprio |
+
+Cada chamada tem tempo máximo (`timeoutMs` em `js/config.js`): busca e endereço 8 s, rotas 15 s,
+estilo do mapa 10 s (sem resposta, o mapa usa o estilo original do provedor) e Overpass 12 s por servidor.
+Se o servidor não responder a tempo, o app mostra uma mensagem e permite tentar de novo.
+
+## Segurança
+- Nomes e textos vindos do OpenStreetMap entram na tela sempre como texto (nunca como HTML).
+- Links de sites dos lugares são sempre `https://` (um valor como `javascript:` vira um endereço inofensivo).
+- Não há chaves, senhas nem backend; preferências, salvos e recentes ficam só no aparelho.
+- **Integridade do MapLibre (SRI) — ainda não ativada.** Foi testada com um servidor de teste: funciona online,
+  pelo service worker e offline, e bloqueia um arquivo adulterado. Falta só o valor real do arquivo do unpkg,
+  que não pôde ser baixado no ambiente onde o projeto foi preparado. Para ativar:
+  1. Gere os dois valores (precisa de internet):
+     ```bash
+     curl -s https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js  | openssl dgst -sha384 -binary | openssl base64 -A
+     curl -s https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css | openssl dgst -sha384 -binary | openssl base64 -A
+     ```
+  2. No `index.html`, acrescente nas duas tags do MapLibre `integrity="sha384-VALOR"` **e** `crossorigin="anonymous"`
+     (sem o `crossorigin` o navegador bloqueia o arquivo).
+  3. Suba a versão (`sw.js` e `config.js`) e confira o app online e offline. Um valor errado impede o app de abrir.
 
 Quando quiser mexer nos "pesos" das ruas (evitar morros, priorizar ciclovias, penalizar trechos), o caminho é subir seu próprio **OSRM**, **Valhalla** ou **GraphHopper** com o recorte do OSM da sua região e apontar `config.js` para ele.

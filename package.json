@@ -1,0 +1,12 @@
+{
+  "name": "meu-mapa",
+  "private": true,
+  "description": "Meu Mapa: app de mapas em JavaScript puro (sem build). Este arquivo existe só para rodar os testes.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\""
+  }
+}

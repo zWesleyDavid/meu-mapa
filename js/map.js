@@ -213,8 +213,8 @@ export function setPuck(lngLat, bearingDeg) {
 
 // ---------------- Câmera ----------------
 // layout em coluna (desktop ou celular deitado): painéis à esquerda, mapa à direita
-const isColumn = () => window.matchMedia('(min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px)').matches;
-const isLandscapePhone = () => window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches;
+const isColumn = () => window.matchMedia(CONFIG.layout.column).matches;
+const isLandscapePhone = () => window.matchMedia(CONFIG.layout.landscapePhone).matches;
 const colRight = (sel) => (document.querySelector(sel)?.getBoundingClientRect().right || 0);
 
 /** Espaço ocupado pelos painéis, para centralizar o conteúdo na área livre. */

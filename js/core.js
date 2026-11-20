@@ -21,11 +21,12 @@ export const state = {
   selectedPlace: null,     // Place
   origin: null,            // Place | { isUser: true }
   destination: null,       // Place
+  stops: [],               // paradas intermediárias (até 3), na ordem da viagem
   profile: 'car',
   routes: [],              // rotas do perfil atual
   selectedRoute: 0,
-  pickTarget: null,        // null | 'origin' | 'destination'
-  view: 'welcome',         // welcome | place | directions
+  pickTarget: null,        // null | 'origin' | 'destination' | 'stop:<índice>' | 'stop:new'
+  view: 'welcome',         // welcome (antes da 1ª tela) | idle | place | list | directions | settings
 };
 
 export const store = {
@@ -65,6 +66,37 @@ export function toast(msg, ms = 2600) {
   t.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+}
+
+const abortError = () => Object.assign(new Error('Cancelado'), { name: 'AbortError' });
+
+/**
+ * fetch + JSON com tempo máximo, cobrindo também a leitura da resposta.
+ * Erros possíveis, pelo `name`:
+ *  - AbortError: cancelado por quem chamou (via `signal`); em geral deve ser ignorado;
+ *  - TimeoutError: o servidor não respondeu em `timeout` ms;
+ *  - HttpError: resposta de erro (o código vem em `status`);
+ *  - TypeError: sem conexão (vem do próprio fetch).
+ */
+export async function fetchJSON(url, { timeout = 10000, signal, ...init } = {}) {
+  if (signal?.aborted) throw abortError();
+  const ctrl = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, timeout);
+  const onAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  try {
+    const res = await fetch(url, { ...init, signal: ctrl.signal });
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { name: 'HttpError', status: res.status });
+    return await res.json();
+  } catch (err) {
+    if (timedOut) throw Object.assign(new Error('O servidor demorou para responder.'), { name: 'TimeoutError' });
+    if (signal?.aborted) throw abortError();
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+  }
 }
 
 export function debounce(fn, ms) {

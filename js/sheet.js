@@ -1,11 +1,12 @@
 // Bottom sheet arrastável no celular; painel lateral fixo no desktop.
+import { CONFIG } from './config.js';
 import { $ } from './core.js';
 
 const sheet = $('#sheet');
 const body = $('#sheet-body');
 const handle = $('#sheet-handle');
 // layout em coluna: desktop ou celular deitado
-const mq = window.matchMedia('(min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px)');
+const mq = window.matchMedia(CONFIG.layout.column);
 
 let current = 'peek';
 let peekPx = 150;
@@ -46,8 +47,6 @@ export function setSheet(stateName, opts = {}) {
   if (stateName !== 'full') body.scrollTop = 0;
   apply(visibleFor(stateName));
 }
-
-export function getSheetState() { return current; }
 
 /** Mede a altura até o elemento marcado com data-peek-end para o estado "peek". */
 export function measurePeek() {

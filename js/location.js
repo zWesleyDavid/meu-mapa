@@ -26,4 +26,3 @@ function onPos(p) {
 
 export function pauseLocationEvents(v) { paused = v; }
 
-export function isLocating() { return watchId != null; }

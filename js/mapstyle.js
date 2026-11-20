@@ -1,6 +1,7 @@
 // Estilo próprio do mapa: parte do OpenFreeMap (esquema OpenMapTiles) e aplica as cores do app
 // nos dois temas, com mais nomes de ruas, mais pontos de interesse e números das casas.
 import { CONFIG } from './config.js';
+import { fetchJSON } from './core.js';
 import { iconExpr, labelColorExpr, SHIELD_TEXT } from './mapicons.js';
 
 const PALETTE = {
@@ -24,8 +25,7 @@ let basePromise = null;
 
 function loadBase() {
   if (!basePromise) {
-    basePromise = fetch(CONFIG.styles.base)
-      .then((r) => { if (!r.ok) throw new Error(`estilo ${r.status}`); return r.json(); })
+    basePromise = fetchJSON(CONFIG.styles.base, { timeout: CONFIG.styles.timeoutMs })
       .catch((err) => { basePromise = null; throw err; });
   }
   return basePromise;

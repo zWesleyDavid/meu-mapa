@@ -2,7 +2,7 @@
 // Grade 48x48. A haste é um traço grosso (sem pontas quadradas, que causavam "espetos");
 // a ponta é um triângulo preenchido, então o encaixe fica limpo em qualquer tamanho.
 
-const W = 8; // espessura da haste na grade de 48
+// A espessura da haste (8 na grade de 48) fica no CSS: .mv .sh { stroke-width }.
 
 /** Triângulo da ponta: vértice em (tx,ty), apontando na direção (dx,dy) normalizada. */
 function head(tx, ty, dx, dy, len = 15, half = 12.5) {
@@ -75,5 +75,3 @@ export function maneuverIcon(name) {
   return `<svg class="mv" viewBox="0 0 48 48" aria-hidden="true">${SHAPES[name] || SHAPES.straight}</svg>`;
 }
 
-export const MANEUVER_NAMES = Object.keys(SHAPES);
-export const STROKE = W;

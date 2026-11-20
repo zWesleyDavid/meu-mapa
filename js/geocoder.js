@@ -1,6 +1,7 @@
 // Busca e geocodificação reversa via Photon. Normaliza tudo para o formato Place:
 // { id, name, address, lng, lat, kind, bbox? }
 import { CONFIG } from './config.js';
+import { fetchJSON } from './core.js';
 import { distance } from './geo.js';
 
 const KIND_LABELS = {
@@ -86,9 +87,7 @@ export function rankResults(places, query, near) {
 }
 
 async function photon(params, signal) {
-  const res = await fetch(`${CONFIG.geocoder.search}?${params}`, { signal });
-  if (!res.ok) throw new Error(`Busca falhou (${res.status})`);
-  const data = await res.json();
+  const data = await fetchJSON(`${CONFIG.geocoder.search}?${params}`, { signal, timeout: CONFIG.geocoder.timeoutMs });
   return (data.features || []).map(featureToPlace);
 }
 
@@ -110,6 +109,8 @@ export async function search(query, near) {
       bbox: [near.lng - dLng, near.lat - dLat, near.lng + dLng, near.lat + dLat].map((v) => v.toFixed(4)).join(',') });
   }
   const [gr, lr] = await Promise.allSettled([photon(global, signal), local ? photon(local, signal) : Promise.resolve([])]);
+  // busca substituída por outra mais nova: não devolve nada desta
+  if (signal.aborted) throw Object.assign(new Error('Cancelado'), { name: 'AbortError' });
   if (gr.status === 'rejected' && (lr.status === 'rejected' || !lr.value.length)) throw gr.reason;
   const seen = new Set();
   const merged = [...(gr.value || []), ...(lr.status === 'fulfilled' ? lr.value : [])]
@@ -119,9 +120,7 @@ export async function search(query, near) {
 
 export async function reverse(lng, lat) {
   const params = new URLSearchParams({ lon: lng, lat, limit: 1 });
-  const res = await fetch(`${CONFIG.geocoder.reverse}?${params}`);
-  if (!res.ok) throw new Error(`Falha ao identificar o local (${res.status})`);
-  const data = await res.json();
+  const data = await fetchJSON(`${CONFIG.geocoder.reverse}?${params}`, { timeout: CONFIG.geocoder.timeoutMs });
   const f = data.features?.[0];
   if (!f) return null;
   const place = featureToPlace(f);
@@ -132,9 +131,14 @@ export async function reverse(lng, lat) {
 /** Endereço legível de um ponto: "Rua X, 123 · Bairro, Cidade" (ou null). */
 export async function reverseAddress(lng, lat) {
   const params = new URLSearchParams({ lon: lng, lat, limit: 1 });
-  const res = await fetch(`${CONFIG.geocoder.reverse}?${params}`);
-  if (!res.ok) return null;
-  const f = (await res.json()).features?.[0];
+  let data;
+  try {
+    data = await fetchJSON(`${CONFIG.geocoder.reverse}?${params}`, { timeout: CONFIG.geocoder.timeoutMs });
+  } catch (err) {
+    if (err.name === 'HttpError') return null; // como antes: erro do servidor = sem endereço
+    throw err;
+  }
+  const f = data.features?.[0];
   if (!f) return null;
   const p = f.properties || {};
   const street = p.street || (p.osm_key === 'highway' ? p.name : null);

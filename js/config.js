@@ -1,7 +1,7 @@
 // Configuração central. Troque provedores aqui sem mexer no resto do código.
 export const CONFIG = {
   appName: 'Meu Mapa',
-  version: '15',  // suba junto com o VERSION do sw.js
+  version: '16',  // suba junto com o VERSION do sw.js
 
   // Vista inicial antes de achar sua localização (Brasil inteiro).
   initialView: { center: [-51.9, -14.2], zoom: 3.6 },
@@ -10,6 +10,7 @@ export const CONFIG = {
   // nomes de ruas/pontos são ajustadas em js/mapstyle.js para os dois temas.
   styles: {
     base: 'https://tiles.openfreemap.org/styles/liberty',
+    timeoutMs: 10000,    // sem resposta: o mapa usa o estilo original do provedor
   },
 
   // Busca de endereços (Photon / Komoot, baseado no OpenStreetMap).
@@ -22,6 +23,7 @@ export const CONFIG = {
     biasZoom: 12,        // raio do viés de localização do Photon (≈ zoom do mapa)
     biasScale: 0.15,     // 0 = só distância, 1 = fama do lugar pesa igual
     debounceMs: 250,
+    timeoutMs: 8000,     // tempo máximo de cada consulta (busca e endereço)
   },
 
   // Rotas: servidores OSRM públicos da FOSSGIS (os mesmos usados no openstreetmap.org).
@@ -34,6 +36,7 @@ export const CONFIG = {
       foot: { label: 'A pé',  url: 'https://routing.openstreetmap.de/routed-foot/route/v1/driving/', simSpeed: 3 },
     },
     defaultProfile: 'car',
+    timeoutMs: 15000,    // rotas longas podem levar alguns segundos
   },
 
   // Categorias rápidas. Duas fontes, combinadas:
@@ -71,6 +74,13 @@ export const CONFIG = {
   categoryRadius: 2000,      // raio inicial
   categoryRadiusMax: 5000,   // amplia se vier pouca coisa
   categoryMinResults: 8,
+
+  // Layout: as mesmas condições estão nos @media do css/app.css (CSS não lê variáveis
+  // em media queries). Se mudar aqui, mude lá também.
+  layout: {
+    column: '(min-width: 900px) and (min-height: 561px), (orientation: landscape) and (max-height: 560px)', // painel em coluna
+    landscapePhone: '(orientation: landscape) and (max-height: 560px)', // celular deitado (suporte no carro)
+  },
 
   // Navegação
   nav: {

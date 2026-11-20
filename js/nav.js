@@ -119,7 +119,7 @@ function buildUI() {
 }
 
 // ---------------- Card recolhível ----------------
-const landscapePhone = () => window.matchMedia('(orientation: landscape) and (max-height: 560px)').matches;
+const landscapePhone = () => window.matchMedia(CONFIG.layout.landscapePhone).matches;
 let collapseTimer = null;
 
 function setCollapsed(v) {
@@ -349,23 +349,24 @@ function render(progress, speed) {
 }
 
 async function reroute(pos) {
+  const session = nav; // a navegação pode terminar (ou recomeçar) enquanto a rota é calculada
   nav.rerouting = true;
   toast('Recalculando rota…');
   say('Recalculando rota', 'reroute');
   try {
     const rest = nav.stops.slice(nav.stopsDone).filter((p) => !p.isUser);
     const [r] = await getRoutes(nav.profile, [pos, ...rest, nav.destination], { alternatives: false });
+    if (nav !== session) return;
     // as paradas restantes viram 1, 2… na rota nova: guarda o deslocamento
     nav.stops = rest; nav.stopsDone = 0;
-    if (!nav) return;
     nav.prep = prepareRoute(r);
     nav.hint = 0; nav.offCount = 0; nav.progress = 0; nav.spoken.clear();
     M.drawRoutes([nav.prep], 0, { labels: false });
     bus.emit('nav:rerouted', r);
   } catch {
-    toast('Não consegui recalcular. Tentando de novo…');
+    if (nav === session) toast('Não consegui recalcular. Tentando de novo…');
   } finally {
-    if (nav) setTimeout(() => { if (nav) nav.rerouting = false; }, 4000);
+    if (nav === session) setTimeout(() => { if (nav === session) nav.rerouting = false; }, 4000);
   }
 }
 

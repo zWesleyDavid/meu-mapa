@@ -471,7 +471,8 @@ body.navigating .user-loc { display: none; }
 .toast { position: fixed; z-index: 40; left: 50%; transform: translateX(-50%); bottom: calc(var(--sheet-h) + 80px + var(--safe-bottom)); background: #0E1013; color: #F2F4F7; padding: 11px 16px; border-radius: 12px; font-size: 14px; box-shadow: var(--shadow-lg); max-width: calc(100vw - 32px); }
 body.navigating .toast { bottom: calc(200px + var(--safe-bottom)); }
 
-/* ---------- Layout em coluna: desktop e celular deitado ---------- */
+/* ---------- Layout em coluna: desktop e celular deitado ----------
+   As condições dos @media abaixo são as mesmas de CONFIG.layout (js/config.js): mude nos dois. */
 :root { --col-w: 400px; --col-gap: 16px; --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); }
 @media (orientation: landscape) and (max-height: 560px) {
   :root { --col-w: min(340px, 42vw); --col-gap: 10px; }

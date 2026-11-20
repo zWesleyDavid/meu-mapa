@@ -80,6 +80,7 @@ export function hedgedFetch(query) {
       const ctrl = new AbortController();
       controllers.push(ctrl);
       const kill = setTimeout(() => ctrl.abort(), CONFIG.overpassTimeoutMs);
+      timers.push(kill); // limpo junto com os outros quando um servidor responder ou a busca for cancelada
       fetch(servers[i], { method: 'POST', body: new URLSearchParams({ data: query }), signal: ctrl.signal })
         .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then((data) => { clearTimeout(kill); done(resolve, data); })

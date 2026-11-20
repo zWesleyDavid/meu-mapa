@@ -1,7 +1,17 @@
 // Cálculo de rotas via OSRM + instruções em português.
 import { CONFIG } from './config.js';
+import { fetchJSON } from './core.js';
 
 const cache = new Map();
+
+/** Erro de rede/servidor → mensagem para quem está usando o app (mantém a causa em `cause`). */
+function routingError(err) {
+  let msg = 'Não foi possível calcular a rota.';
+  if (err.name === 'TimeoutError') msg = 'O servidor de rotas demorou para responder. Tente de novo.';
+  else if (err.name === 'HttpError') msg = `O servidor de rotas está indisponível agora (erro ${err.status}). Tente de novo em instantes.`;
+  else if (err.name === 'TypeError') msg = 'Sem conexão com o servidor de rotas. Verifique a internet.';
+  return Object.assign(new Error(msg, { cause: err }), { name: err.name });
+}
 
 /**
  * Busca rotas. Aceita (perfil, de, para, opções) ou (perfil, [pontos...], opções) para rotas com paradas.
@@ -21,9 +31,12 @@ export async function getRoutes(profile, a, b, c) {
   const url = `${base}${coords}?${params}`;
   if (cache.has(url)) return cache.get(url);
 
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Servidor de rotas respondeu ${res.status}`);
-  const data = await res.json();
+  let data;
+  try {
+    data = await fetchJSON(url, { timeout: CONFIG.routing.timeoutMs });
+  } catch (err) {
+    throw routingError(err);
+  }
   if (data.code !== 'Ok' || !data.routes?.length) {
     throw new Error(data.code === 'NoRoute' ? 'Não encontrei caminho entre esses pontos.' : 'Não foi possível calcular a rota.');
   }

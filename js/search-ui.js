@@ -122,8 +122,11 @@ const runSearch = debounce(async (q) => {
     if (input.value.trim() !== q) return; // resposta atrasada
     render(results, { empty: 'Nada encontrado', shortcut: categoryFor(q) });
   } catch (err) {
-    if (err.name === 'AbortError') return;
-    render([], { empty: 'Não foi possível buscar agora. Verifique a conexão.' });
+    if (err.name === 'AbortError') return; // substituída por uma busca mais nova
+    if (input.value.trim() !== q) return;
+    render([], { empty: err.name === 'TimeoutError'
+      ? 'A busca demorou para responder. Tente de novo.'
+      : 'Não foi possível buscar agora. Verifique a conexão.' });
   }
 }, CONFIG.geocoder.debounceMs);
 

@@ -18,7 +18,6 @@ import { getSetting, setSetting } from './settings.js';
 
 const body = $('#sheet-body');
 const MAX_STOPS = 3;
-state.stops = [];
 const routeTop = $('#route-top');
 const ctx = $('#ctx-menu');
 
