@@ -1,7 +1,8 @@
 // Caixa de busca: autocompletar, histórico recente e navegação por teclado.
 import { CONFIG } from './config.js';
 import { $, bus, state, store, el, debounce } from './core.js';
-import { search } from './geocoder.js';
+import { search, tokens } from './geocoder.js';
+import { fmtDistance } from './format.js';
 import { icon } from './icons.js';
 import { map } from './map.js';
 
@@ -46,7 +47,7 @@ function near() {
   return map.getZoom() > 8 ? { lng: c.lng, lat: c.lat } : null;
 }
 
-function render(places, { recents = false, empty = '' } = {}) {
+function render(places, { recents = false, empty = '', shortcut = null } = {}) {
   items = [];
   active = -1;
   list.innerHTML = '';
@@ -63,6 +64,7 @@ function render(places, { recents = false, empty = '' } = {}) {
     if (rec.length) list.append(el('li', { class: 'r-section' }, 'Recentes'));
     rec.forEach((p) => list.append(row(p, 'history')));
   } else {
+    if (shortcut) list.append(shortcutRow(shortcut));
     places.forEach((p) => list.append(row(p, 'pin')));
   }
   if (!places.length && !recents && empty) list.append(el('li', { class: 'r-empty' }, empty));
@@ -79,7 +81,30 @@ function row(p, ico) {
   el('span', { class: 'r-ico', html: icon(ico) }),
   el('div', { style: 'min-width:0' },
     el('div', { class: 'r-main' }, p.name),
-    (p.kind || p.address) ? el('div', { class: 'r-sub' }, [p.kind, p.address].filter(Boolean).join(' · ')) : null));
+    (p.kind || p.address) ? el('div', { class: 'r-sub' }, [p.kind, p.address].filter(Boolean).join(' · ')) : null),
+  p.dist != null ? el('span', { class: 'r-dist' }, fmtDistance(p.dist)) : null);
+}
+
+/** "mercado", "farmácia", "posto"… → atalho para a lista da categoria perto de você. */
+function categoryFor(q) {
+  if (state.pickTarget) return null;
+  const key = tokens(q).join(' ');
+  if (!key) return null;
+  return CONFIG.categories.find((c) => (c.words || []).includes(key)) || null;
+}
+
+function shortcutRow(cat) {
+  items.push({ shortcut: cat.id });
+  return el('li', {
+    role: 'option', class: 'r-shortcut',
+    onmousedown: (e) => e.preventDefault(),
+    onclick: () => { list.hidden = true; input.blur(); input.value = ''; clearBtn.hidden = true; bus.emit('category:open', cat.id); },
+  },
+  el('span', { class: 'r-ico', html: icon(cat.icon) }),
+  el('div', { style: 'min-width:0' },
+    el('div', { class: 'r-main' }, `${cat.plural || cat.label} perto de você`),
+    el('div', { class: 'r-sub' }, 'Do mais perto para o mais longe')),
+  el('span', { class: 'r-go', html: icon('chevron') }));
 }
 
 function choose(place) {
@@ -95,7 +120,7 @@ const runSearch = debounce(async (q) => {
   try {
     const results = await search(q, near());
     if (input.value.trim() !== q) return; // resposta atrasada
-    render(results, { empty: 'Nada encontrado' });
+    render(results, { empty: 'Nada encontrado', shortcut: categoryFor(q) });
   } catch (err) {
     if (err.name === 'AbortError') return;
     render([], { empty: 'Não foi possível buscar agora. Verifique a conexão.' });
@@ -106,6 +131,9 @@ input.addEventListener('input', () => {
   const q = input.value.trim();
   clearBtn.hidden = !input.value && !state.pickTarget;
   if (q.length < 2) { render(getRecents(), { recents: true }); return; }
+  // o atalho da categoria aparece na hora, antes da resposta da busca
+  const cat = categoryFor(q);
+  if (cat && list.querySelector('.r-shortcut')?.dataset.cat !== cat.id) { render([], { shortcut: cat }); list.querySelector('.r-shortcut').dataset.cat = cat.id; }
   runSearch(q);
 });
 

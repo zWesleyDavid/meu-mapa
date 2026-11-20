@@ -1,6 +1,7 @@
 // Busca e geocodificação reversa via Photon. Normaliza tudo para o formato Place:
 // { id, name, address, lng, lat, kind, bbox? }
 import { CONFIG } from './config.js';
+import { distance } from './geo.js';
 
 const KIND_LABELS = {
   restaurant: 'Restaurante', cafe: 'Café', bar: 'Bar', fast_food: 'Lanchonete',
@@ -31,6 +32,8 @@ export function featureToPlace(f) {
     address: [...new Set(parts)].join(', '),
     kind: KIND_LABELS[p.osm_value] || '',
     hasStreet: !!street,
+    type: p.type || '',          // house | street | city | district | other…
+    osmKey: p.osm_key || '',
     lng, lat,
     bbox: p.extent ? [p.extent[0], p.extent[3], p.extent[2], p.extent[1]] : null, // [w,s,e,n]
   };
@@ -38,15 +41,80 @@ export function featureToPlace(f) {
 
 let controller;
 
-export async function search(query, near) {
-  controller?.abort();
-  controller = new AbortController();
-  const params = new URLSearchParams({ q: query, limit: CONFIG.geocoder.limit });
-  if (near) { params.set('lat', near.lat.toFixed(5)); params.set('lon', near.lng.toFixed(5)); }
-  const res = await fetch(`${CONFIG.geocoder.search}?${params}`, { signal: controller.signal });
+// ---------------- Busca com prioridade para o que está perto ----------------
+// Duas consultas em paralelo ao Photon:
+//  1) geral, com viés de localização (o Photon já pesa a distância);
+//  2) só dentro de ~30 km de você, para garantir que as opções próximas apareçam
+//     mesmo quando existe uma mais "famosa" longe (ex.: McDonald's, mercado, farmácia).
+// Depois reordenamos: área com o nome exato (cidade, bairro) primeiro; em seguida tudo
+// cujo nome bate com o que foi digitado, do mais perto para o mais longe; por fim o resto
+// na ordem do Photon (buscas muito específicas, endereço com número etc.).
+
+const STOP = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'a', 'o', 'the']);
+export function tokens(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/['’`´]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ')
+    .filter((t) => t && !STOP.has(t));
+}
+const AREA_TYPES = new Set(['city', 'county', 'state', 'country', 'district', 'locality']);
+const isArea = (p) => AREA_TYPES.has(p.type) || p.osmKey === 'place' || p.osmKey === 'boundary';
+
+/** O nome contém todas as palavras digitadas (a última pode estar pela metade). */
+export function nameMatches(name, qTokens) {
+  if (!qTokens.length) return false;
+  const nt = tokens(name);
+  const joined = nt.join('');
+  return qTokens.every((t, i) => nt.some((w) => (i === qTokens.length - 1 ? w.startsWith(t) : w === t || w.startsWith(t)))
+    || joined.includes(t)) || joined.includes(qTokens.join(''));
+}
+
+export function rankResults(places, query, near) {
+  const q = tokens(query);
+  const qKey = q.join(' ');
+  const list = places.map((p, i) => ({
+    ...p, order: i,
+    dist: near ? distance([near.lng, near.lat], [p.lng, p.lat]) : null,
+  }));
+  const pinned = [], close = [], rest = [];
+  for (const p of list) {
+    if (isArea(p) && tokens(p.name).join(' ') === qKey) pinned.push(p);
+    else if (near && !isArea(p) && nameMatches(p.name, q)) close.push(p);
+    else rest.push(p);
+  }
+  close.sort((a, b) => a.dist - b.dist);
+  return [...pinned, ...close, ...rest].map(({ order, ...p }) => p);
+}
+
+async function photon(params, signal) {
+  const res = await fetch(`${CONFIG.geocoder.search}?${params}`, { signal });
   if (!res.ok) throw new Error(`Busca falhou (${res.status})`);
   const data = await res.json();
   return (data.features || []).map(featureToPlace);
+}
+
+export async function search(query, near) {
+  controller?.abort();
+  controller = new AbortController();
+  const { signal } = controller;
+  const g = CONFIG.geocoder;
+  const base = { q: query, limit: g.limit };
+  const global = new URLSearchParams(base);
+  let local = null;
+  if (near) {
+    const lat = near.lat.toFixed(5), lon = near.lng.toFixed(5);
+    global.set('lat', lat); global.set('lon', lon);
+    global.set('zoom', g.biasZoom); global.set('location_bias_scale', g.biasScale);
+    const dLat = g.nearKm / 111;
+    const dLng = g.nearKm / (111 * Math.cos(near.lat * Math.PI / 180));
+    local = new URLSearchParams({ ...base, lat, lon, zoom: 14, location_bias_scale: 0.05,
+      bbox: [near.lng - dLng, near.lat - dLat, near.lng + dLng, near.lat + dLat].map((v) => v.toFixed(4)).join(',') });
+  }
+  const [gr, lr] = await Promise.allSettled([photon(global, signal), local ? photon(local, signal) : Promise.resolve([])]);
+  if (gr.status === 'rejected' && (lr.status === 'rejected' || !lr.value.length)) throw gr.reason;
+  const seen = new Set();
+  const merged = [...(gr.value || []), ...(lr.status === 'fulfilled' ? lr.value : [])]
+    .filter((p) => (seen.has(p.id) ? false : seen.add(p.id)));
+  return rankResults(merged, query, near).slice(0, g.show);
 }
 
 export async function reverse(lng, lat) {

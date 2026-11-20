@@ -8,6 +8,7 @@ const KIND = {
   restaurant: 'Restaurante', fast_food: 'Lanchonete', food_court: 'Praça de alimentação',
   cafe: 'Café', coffee: 'Café', bakery: 'Padaria', pastry: 'Confeitaria',
   fuel: 'Posto', pharmacy: 'Farmácia', chemist: 'Farmácia',
+  supermarket: 'Supermercado', convenience: 'Conveniência', greengrocer: 'Hortifrúti', wholesale: 'Atacado',
 };
 
 function kindOf(tags, fallback) {

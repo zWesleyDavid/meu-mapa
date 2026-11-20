@@ -1,7 +1,7 @@
 // Configuração central. Troque provedores aqui sem mexer no resto do código.
 export const CONFIG = {
   appName: 'Meu Mapa',
-  version: '13',  // suba junto com o VERSION do sw.js
+  version: '14',  // suba junto com o VERSION do sw.js
 
   // Vista inicial antes de achar sua localização (Brasil inteiro).
   initialView: { center: [-51.9, -14.2], zoom: 3.6 },
@@ -16,7 +16,11 @@ export const CONFIG = {
   geocoder: {
     search: 'https://photon.komoot.io/api/',
     reverse: 'https://photon.komoot.io/reverse',
-    limit: 8,
+    limit: 12,           // por consulta (são duas: geral e perto de você)
+    show: 10,            // quantos resultados aparecem na lista
+    nearKm: 30,          // raio da consulta "perto de você"
+    biasZoom: 12,        // raio do viés de localização do Photon (≈ zoom do mapa)
+    biasScale: 0.15,     // 0 = só distância, 1 = fama do lugar pesa igual
     debounceMs: 250,
   },
 
@@ -43,18 +47,26 @@ export const CONFIG = {
   overpassHedgeMs: 2500,   // espera antes de tentar o próximo servidor
   overpassTimeoutMs: 12000,
   categories: [
-    { id: 'food', label: 'Comida', icon: 'food', kind: 'Restaurante',
+    { id: 'food', label: 'Comida', icon: 'food', kind: 'Restaurante', plural: 'Restaurantes e lanchonetes',
+      words: ['comida', 'restaurante', 'restaurantes', 'lanchonete', 'lanchonetes', 'lanche', 'almoco', 'jantar'],
       tags: ['["amenity"~"^(restaurant|fast_food|food_court)$"]'],
       tileClasses: ['restaurant', 'fast_food', 'food_court'] },
-    { id: 'cafe', label: 'Café', icon: 'cafe', kind: 'Café',
+    { id: 'cafe', label: 'Café', icon: 'cafe', kind: 'Café', plural: 'Cafés e padarias',
+      words: ['cafe', 'cafes', 'cafeteria', 'cafeterias', 'padaria', 'padarias', 'confeitaria'],
       tags: ['["amenity"="cafe"]', '["shop"~"^(coffee|bakery|pastry)$"]'],
       tileClasses: ['cafe', 'bakery', 'coffee', 'pastry'] },
-    { id: 'fuel', label: 'Combustível', icon: 'fuel', kind: 'Posto',
+    { id: 'fuel', label: 'Combustível', icon: 'fuel', kind: 'Posto', plural: 'Postos de combustível',
+      words: ['posto', 'postos', 'gasolina', 'combustivel', 'etanol', 'alcool', 'diesel', 'posto gasolina', 'posto combustivel'],
       tags: ['["amenity"="fuel"]'],
       tileClasses: ['fuel'] },
-    { id: 'pharmacy', label: 'Farmácia', icon: 'pharmacy', kind: 'Farmácia',
+    { id: 'pharmacy', label: 'Farmácia', icon: 'pharmacy', kind: 'Farmácia', plural: 'Farmácias',
+      words: ['farmacia', 'farmacias', 'drogaria', 'drogarias', 'remedio'],
       tags: ['["amenity"="pharmacy"]', '["shop"="chemist"]', '["healthcare"="pharmacy"]'],
       tileClasses: ['pharmacy', 'chemist'] },
+    { id: 'shop', label: 'Mercado', icon: 'cart', kind: 'Mercado', plural: 'Mercados',
+      words: ['mercado', 'mercados', 'supermercado', 'supermercados', 'mercadinho', 'mercearia', 'hortifruti', 'conveniencia', 'atacado', 'atacadista'],
+      tags: ['["shop"~"^(supermarket|convenience|greengrocer|wholesale)$"]'],
+      tileClasses: ['supermarket', 'convenience', 'greengrocer', 'grocery'] },
   ],
   categoryRadius: 2000,      // raio inicial
   categoryRadiusMax: 5000,   // amplia se vier pouca coisa

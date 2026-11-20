@@ -440,6 +440,7 @@ bus.on('place:chosen', (place) => {
 });
 
 bus.on('search:cleared', () => { if (state.view === 'place') showIdle(); });
+bus.on('category:open', (id) => { const c = CONFIG.categories.find((x) => x.id === id); if (c) { listState.category = null; openCategory(c); } });
 bus.on('pick:cancel', () => { if (state.view === 'directions') showDirections(); });
 
 let flyOnFix = true;

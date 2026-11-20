@@ -163,6 +163,12 @@ svg { flex: none; }
 .results .r-empty, .results .r-section { color: var(--text-2); cursor: default; }
 .results .r-section { font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 10px 16px 4px; }
 .results .r-section:hover, .results .r-empty:hover { background: none; }
+.results .r-dist { margin-left: auto; flex: none; align-self: flex-start; margin-top: 2px; font: 600 12px var(--mono); color: var(--text-2); white-space: nowrap; }
+.results .r-shortcut .r-ico { background: var(--accent-soft, var(--surface-2)); color: var(--accent-ink); }
+.results .r-shortcut .r-main { font-weight: 600; }
+.results .r-go { margin-left: auto; flex: none; color: var(--text-2); display: grid; place-items: center; }
+.results .r-go svg { transform: rotate(-90deg); width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.results .r-shortcut { border-bottom: 1px solid var(--surface-3); }
 
 /* ---------- Placa DE/PARA + modos ---------- */
 .route-top { position: fixed; z-index: 21; top: calc(14px + var(--safe-top)); left: 12px; right: 12px; display: flex; flex-direction: column; gap: 10px; }

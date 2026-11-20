@@ -25,8 +25,9 @@ No celular, use "Adicionar à tela inicial" para instalar como app.
 - Mapa com estilo próprio nos dois temas: avenidas em maiúsculas espaçadas, bairros espaçados, escudo de rodovia, nomes mais cedo e maiores, números das casas (`js/mapstyle.js`)
 - Ícones próprios no estilo "Placa" (desenhados pelo app, `js/mapicons.js`): cor por grupo de categoria, pontinhos de longe e placa com nome de perto
 - Sua localização com **cone de direção** (bússola do celular; no iPhone a permissão é pedida ao tocar no botão de localização)
-- Busca com autocompletar, salvos e recentes
-- Categorias rápidas (Comida, Café, Combustível, Farmácia): resultados instantâneos dos pontos do próprio mapa + busca completa no OpenStreetMap (várias etiquetas por categoria, servidores reserva, raio ampliado para 5 km se vier pouca coisa, cache de 5 min)
+- Busca com autocompletar, salvos e recentes, **priorizando o que está perto**: duas consultas em paralelo (geral e num raio de ~30 km), e o que tem o nome digitado aparece do mais perto para o mais longe, com a distância na lista; cidade/bairro com o nome exato e buscas bem específicas (ex.: endereço com número) mantêm a ordem normal
+- Digitar "mercado", "farmácia", "posto", "padaria"… mostra o atalho "… perto de você", que abre a lista da categoria
+- Categorias rápidas (Comida, Café, Combustível, Farmácia, Mercado): resultados instantâneos dos pontos do próprio mapa + busca completa no OpenStreetMap (várias etiquetas por categoria, servidores reserva, raio ampliado para 5 km se vier pouca coisa, cache de 5 min)
 - Card do lugar com tempo de carro, distância e chegada, e detalhes do OpenStreetMap: endereço, aberto/fechado agora e horários da semana, telefone, WhatsApp, site, Instagram, comodidades e combustíveis, com link para sugerir edição (`js/details.js`, `js/hours.js`)
 - Toque longo (ou clique direito): "Rotas até aqui", "Sair daqui", "O que tem aqui?"
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português
