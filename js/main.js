@@ -140,7 +140,9 @@ function showPlace(place, { fly = false } = {}) {
   M.setMarker('place', place);
   if (changed) { placeInfo = null; placeDetails = { loading: true }; loadPlaceInfo(place); loadPlaceDetails(place); }
   renderPlace();
-  if (fly) M.flyToPlace(place);
+  // O painel só assume a altura nova no quadro seguinte (mount usa requestAnimationFrame);
+  // a câmera espera por ele para descontar a altura certa e o lugar ficar no meio da área visível.
+  if (fly) requestAnimationFrame(() => requestAnimationFrame(() => { if (state.selectedPlace === place) M.flyToPlace(place); }));
 }
 
 function renderPlace() {
