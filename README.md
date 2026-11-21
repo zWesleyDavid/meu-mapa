@@ -100,7 +100,7 @@ js/geocoder.js        busca/geocodificação reversa (Photon) → formato Place
 js/routing.js         rotas (OSRM) + gerador de instruções em pt-BR
 js/sheet.js           bottom sheet arrastável
 js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálculo, zoom dinâmico)
-js/junction.js        faixas: análise, setas de faixa e visão da junção em movimento (CSS 3D)
+js/junction.js        faixas: análise, setas de faixa e visão da junção em movimento (canvas com perspectiva própria)
 js/geo.js             geometria: distâncias, projeção na rota
 js/location.js        GPS do usuário
 js/places.js          categorias próximas (blocos do mapa + Overpass com servidores reserva)

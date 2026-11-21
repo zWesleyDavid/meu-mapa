@@ -90,11 +90,11 @@ function signTexts(step) {
 }
 
 // ---------------- Visão da junção em movimento ----------------
-// Cena em 3D do próprio navegador (CSS): um "chão" de 640 × 3000 deitado com perspectiva.
-// A estrutura é montada uma vez por manobra (junctionScene) e, a cada quadro, a nav.js aplica
-// junctionFrame(): as faixas andam conforme a distância real percorrida (não por relógio).
-export const SCENE = { W: 366, H: 250, PX_PER_M: 6, CAR_Y: 2928, SPLIT_Y: 420, DASH: 96, LOOP: 640 };
-const V = (name) => `var(--${name})`;
+// Desenhada num <canvas> com a perspectiva calculada aqui (e não com camadas 3D do navegador,
+// que alguns celulares cortam quando são muito compridas). O "chão" usa coordenadas de plano:
+// x de 0 a 640 (pista centrada em 320) e d = distância à frente do pé da tela, em px de plano.
+// A cada quadro a nav.js chama junctionFrame() com a distância real e drawJunction() desenha.
+export const SCENE = { W: 366, H: 250, PX_PER_M: 6, CAR_D: 72, FAR_D: 3000, NEAR_D: -60, DASH: 96, LOOP: 640, P: 420, EYE_Y: 58 };
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const smooth = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
 
@@ -118,8 +118,19 @@ export function junctionGeometry(info) {
   return { N, w, x0, centers, lanes, g, ramp: g < N, mirrored, start, target, branch: info.branch };
 }
 
-const PUCK_SCALE = 0.853; // largura do chão na altura da bolinha (perspectiva 420 px, ~72 px à frente)
-const screenX = (geom, x) => { const sx = SCENE.W / 2 + (x - 320) * PUCK_SCALE; return geom.mirrored ? SCENE.W - sx : sx; };
+
+/** Projeta um ponto do chão na tela (366 × 250). `turn` gira o chão em volta do pé da tela. */
+export function projectPoint(x, d, turn = 0, mirrored = false) {
+  const t = (turn * Math.PI) / 180;
+  const dx = x - 320;
+  const rx = dx * Math.cos(t) + d * Math.sin(t);
+  const rd = d * Math.cos(t) - dx * Math.sin(t);
+  const k = SCENE.P / (SCENE.P + rd);
+  const sx = SCENE.W / 2 + rx * k;
+  return [mirrored ? SCENE.W - sx : sx, SCENE.EYE_Y + (SCENE.H - SCENE.EYE_Y) * k];
+}
+
+const screenX = (geom, x) => projectPoint(x, SCENE.CAR_D, 0, geom.mirrored)[0];
 
 /**
  * Estado de um quadro: `remaining` = metros até a manobra; `along` = metros percorridos na rota.
@@ -128,17 +139,14 @@ const screenX = (geom, x) => { const sx = SCENE.W / 2 + (x - 320) * PUCK_SCALE; 
 export function junctionFrame(geom, remaining, along) {
   const r = Math.max(0, remaining);
   const s = SCENE.PX_PER_M;
-  const mod = (a, m) => ((a % m) + m) % m;
   const lane = smooth((260 - r) / 120); // muda de faixa entre 260 m e 140 m
-  const px = screenX(geom, geom.centers[geom.start] + (geom.centers[geom.target] - geom.centers[geom.start]) * lane);
   const out = clamp01((40 - r) / 40);    // nos últimos 40 m a placa sai de cena
   return {
-    approachY: SCENE.CAR_Y - r * s - SCENE.SPLIT_Y,
-    dashY: mod(along * s, SCENE.DASH),
-    loopY: mod(along * s, SCENE.LOOP),
+    split: SCENE.CAR_D + r * s,           // onde a alça se separa (d, em px de plano)
+    phase: along * s,                     // quanto o chão já andou (tracejado e setas)
     ok: 0.18 * smooth((320 - r) / 100),
     bad: 0.45 * smooth((220 - r) / 120),
-    puckX: px,
+    puckX: screenX(geom, geom.centers[geom.start] + (geom.centers[geom.target] - geom.centers[geom.start]) * lane),
     gantryScale: 0.75 + 0.3 * clamp01((320 - r) / 280) + 0.25 * out,
     gantryOut: out,
     turn: geom.ramp ? -20 * smooth((35 - r) / 35) || 0 : 0,
@@ -146,63 +154,138 @@ export function junctionFrame(geom, remaining, along) {
   };
 }
 
-const glyphOnGround = (name, x, y, color) =>
-  `<svg x="${(x - 17).toFixed(1)}" y="${y}" width="34" height="110" viewBox="0 0 48 48" preserveAspectRatio="none" class="lane-ico" style="color:${color}">${laneGlyph(name)}</svg>`;
+// --- formas do quadro (puro: dá para testar sem canvas) ---
+const mod = (a, m) => ((a % m) + m) % m;
 
-/** HTML da cena (estrutura fixa da manobra). */
-export function junctionScene(info, step) {
-  const geom = junctionGeometry(info);
-  const { N, w, x0, centers, lanes, g, ramp } = geom;
-  const gx0 = x0 + g * w, gx1 = x0 + N * w;
-  const Y = SCENE.SPLIT_Y;
-  const st = (x) => `style="${x}"`;
-  // chão fixo: faixas que seguem (ou todas, sem alça)
-  const fixed = [];
-  fixed.push(`<div class="jv-fill" style="left:${x0}px;width:${gx0 - x0}px;background:${V('j-asphalt')}"></div>`);
-  lanes.forEach((l, i) => {
-    if (i >= g) return;
-    fixed.push(`<div class="jv-fill ${l.valid ? 'jv-ok' : 'jv-bad'}" style="left:${x0 + i * w}px;width:${w}px;background:${l.valid ? V('route') : '#000'}"></div>`);
+/** Recorta um polígono do chão no trecho visível (perto/longe), já girado. */
+function clipAndProject(pts, turn, mirrored) {
+  const t = (turn * Math.PI) / 180;
+  const rot = pts.map(([x, d]) => { const dx = x - 320; return [dx * Math.cos(t) + d * Math.sin(t), d * Math.cos(t) - dx * Math.sin(t)]; });
+  const clip = (poly, keep, cross) => {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const ka = keep(a), kb = keep(b);
+      if (ka) out.push(a);
+      if (ka !== kb) out.push(cross(a, b));
+    }
+    return out;
+  };
+  const at = (lim) => (a, b) => { const u = (lim - a[1]) / (b[1] - a[1]); return [a[0] + (b[0] - a[0]) * u, lim]; };
+  let poly = clip(rot, (p) => p[1] >= SCENE.NEAR_D, at(SCENE.NEAR_D));
+  poly = clip(poly, (p) => p[1] <= SCENE.FAR_D, at(SCENE.FAR_D));
+  if (poly.length < 3) return null;
+  return poly.map(([rx, rd]) => {
+    const k = SCENE.P / (SCENE.P + rd);
+    const sx = SCENE.W / 2 + rx * k;
+    return [mirrored ? SCENE.W - sx : sx, SCENE.EYE_Y + (SCENE.H - SCENE.EYE_Y) * k];
   });
-  fixed.push(`<div class="jv-fill" style="left:${x0 - 4}px;width:4px;background:${V('j-mark')}"></div>`);
-  if (!ramp) fixed.push(`<div class="jv-fill" style="left:${gx1}px;width:4px;background:${V('j-mark')}"></div>`);
-  for (let i = 1; i < g; i++) fixed.push(`<div class="jv-dash" style="left:${x0 + i * w - 2}px"></div>`);
-  // setas das faixas que seguem: camada em laço
-  const loop = [];
-  for (let k = 0; k < 6; k++) lanes.forEach((l, i) => { if (i < g) loop.push(glyphOnGround(l.glyph, centers[i], k * SCENE.LOOP + 180, l.valid ? V('j-mark') : V('j-mark-dim'))); });
-  // camada que se aproxima: grupo da alça, alça e fita da rota
-  const ap = [];
+}
+
+const rect = (x0, x1, d0, d1) => [[x0, d0], [x1, d0], [x1, d1], [x0, d1]];
+
+/** Faixa de largura `w` ao longo de uma linha [(x, d), …] (cantos simples). */
+function ribbon(line, w) {
+  const left = [], right = [];
+  for (let i = 0; i < line.length; i++) {
+    const a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)];
+    const tx = b[0] - a[0], td = b[1] - a[1];
+    const L = Math.hypot(tx, td) || 1;
+    const nx = (-td / L) * (w / 2), nd = (tx / L) * (w / 2);
+    left.push([line[i][0] + nx, line[i][1] + nd]);
+    right.push([line[i][0] - nx, line[i][1] - nd]);
+  }
+  return [...left, ...right.reverse()];
+}
+
+function bezier(p0, p1, p2, p3, n = 18) {
+  const pts = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, u = 1 - t;
+    pts.push([0, 1].map((k) => u * u * u * p0[k] + 3 * u * u * t * p1[k] + 3 * u * t * t * p2[k] + t * t * t * p3[k]));
+  }
+  return pts;
+}
+
+/**
+ * Lista do que desenhar no quadro, em coordenadas de tela (366 × 250), na ordem:
+ * polígonos { pts, fill, alpha } e setas { glyph, m: [a, b, c, d, e, f], color }.
+ * `fill`/`color` são nomes de cores do tema (asphalt, mark, dim, route, case, black).
+ */
+export function sceneOps(geom, f) {
+  const { N, w, x0, centers, lanes, g, ramp, mirrored } = geom;
+  const T = f.turn;
+  const polys = [];
+  const add = (pts, fill, alpha = 1) => { const p = clipAndProject(pts, T, mirrored); if (p && alpha > 0.001) polys.push({ pts: p, fill, alpha }); };
+  const gx0 = x0 + g * w, gx1 = x0 + N * w;
+  const NEAR = SCENE.NEAR_D, FAR = SCENE.FAR_D;
+  const sp = f.split;
+  // pista que segue (todas as faixas, se não houver alça)
+  add(rect(x0, gx0, NEAR, FAR), 'asphalt');
+  lanes.forEach((l, i) => { if (i < g) add(rect(x0 + i * w, x0 + (i + 1) * w, NEAR, FAR), l.valid ? 'route' : 'black', l.valid ? f.ok : f.bad); });
+  add(rect(x0 - 4, x0, NEAR, FAR), 'mark');
+  if (!ramp) add(rect(gx1, gx1 + 4, NEAR, FAR), 'mark');
+  // tracejado entre as faixas que seguem: anda com o chão
+  const ph = mod(f.phase, SCENE.DASH);
+  for (let i = 1; i < g; i++) {
+    const x = x0 + i * w;
+    for (let d = -ph - SCENE.DASH; d < FAR; d += SCENE.DASH) {
+      if (d + 48 < NEAR) continue;
+      add(rect(x - 2, x + 2, d, d + 48), 'mark');
+    }
+  }
+  const arrows = [];
+  const arrow = (glyph, xc, d, color) => {
+    if (d < 0 || d > 2600) return;
+    const O = projectPoint(xc - 17, d + 55, T, mirrored);
+    const X = projectPoint(xc + 17, d + 55, T, mirrored);
+    const Y = projectPoint(xc - 17, d - 55, T, mirrored);
+    arrows.push({ glyph, color, m: [(X[0] - O[0]) / 48, (X[1] - O[1]) / 48, (Y[0] - O[0]) / 48, (Y[1] - O[1]) / 48, O[0], O[1]] });
+  };
+  // setas das faixas que seguem: repetem a cada 640 px de chão
+  const pa = mod(f.phase, SCENE.LOOP);
+  for (let k = -1; k < 6; k++) {
+    const d = k * SCENE.LOOP + SCENE.LOOP - 180 - pa;
+    lanes.forEach((l, i) => { if (i < g) arrow(l.glyph, centers[i], d, l.valid ? 'mark' : 'dim'); });
+  }
   if (ramp) {
     const gc = (gx0 + gx1) / 2, rw = gx1 - gx0;
-    const curve = `M${gc} ${Y + 40}C${gc} ${Y - 60} ${gc + 36} ${Y - 170} ${gc + 240} ${Y - 260}`;
-    ap.push(`<rect x="${gx0}" y="${Y}" width="${rw}" height="3400" ${st(`fill:${V('j-asphalt')}`)}/>`);
-    ap.push(`<rect class="jv-ok" x="${gx0}" y="${Y}" width="${rw}" height="3400" ${st(`fill:${V('route')}`)}/>`);
-    ap.push(`<path d="${curve}" ${st(`fill:none;stroke:${V('j-mark')};stroke-width:${rw + 8}`)}/>`);
-    ap.push(`<path d="${curve}" ${st(`fill:none;stroke:${V('j-asphalt')};stroke-width:${rw}`)}/>`);
-    ap.push(`<path class="jv-ok" d="${curve}" ${st(`fill:none;stroke:${V('route')};stroke-width:${rw}`)}/>`);
+    const curve = bezier([gc, sp - 40], [gc, sp + 60], [gc + 36, sp + 170], [gc + 240, sp + 260]);
+    const end = curve[curve.length - 1], prev = curve[curve.length - 2];
+    const ext = [end[0] + (end[0] - prev[0]) * 12, end[1] + (end[1] - prev[1]) * 12]; // segue até sair do chão
+    const rampLine = [...curve, ext];
+    // faixas da alça + alça num polígono só: sem emenda visível entre a reta e a curva
+    const lanesAndRamp = [[gx0, NEAR], ...ribbon(rampLine, rw), [gx1, NEAR]];
+    add(ribbon(rampLine, rw + 8), 'mark');
+    add(lanesAndRamp, 'asphalt');
+    add(lanesAndRamp, 'route', f.ok);
+    // tracejado da alça: preso à bifurcação
     for (let i = g; i < N; i++) {
       const x = x0 + i * w;
-      ap.push(`<line x1="${x}" y1="${Y}" x2="${x}" y2="3800" ${st(`stroke:${V('j-mark')};stroke-width:4;stroke-dasharray:48 48`)}/>`);
-      for (let k = 0; k < 5; k++) ap.push(glyphOnGround(lanes[i].glyph, centers[i], Y + 300 + k * SCENE.LOOP, V('j-mark')));
+      for (let d = sp - 48; d + 48 > NEAR; d -= SCENE.DASH) add(rect(x - 2, x + 2, Math.max(d, NEAR), d + 48), 'mark');
+      for (let k = 0; k < 6; k++) arrow(lanes[i].glyph, centers[i], sp - 355 - k * SCENE.LOOP, 'mark');
     }
-    ap.push(`<line x1="${gx1}" y1="${Y + 30}" x2="${gx1}" y2="3800" ${st(`stroke:${V('j-mark')};stroke-width:4`)}/>`);
-    ap.push(`<line x1="${gx0}" y1="-3000" x2="${gx0}" y2="${Y}" ${st(`stroke:${V('j-mark')};stroke-width:4`)}/>`);
-    const route = `M${gc} 3800L${gc} ${Y + 40}C${gc} ${Y - 60} ${gc + 36} ${Y - 170} ${gc + 220} ${Y - 250}`;
-    ap.push(`<path d="${route}" ${st(`fill:none;stroke:${V('j-case')};stroke-width:30;stroke-linecap:round`)}/>`);
-    ap.push(`<path d="${route}" ${st(`fill:none;stroke:${V('route')};stroke-width:20;stroke-linecap:round`)}/>`);
+    add(rect(gx1, gx1 + 4, NEAR, sp - 30), 'mark');
+    add(rect(gx0 - 2, gx0 + 2, sp, FAR), 'mark');
+    const route = [[gc, NEAR], ...curve.slice(0, -2)];
+    add(ribbon(route, 30), 'case');
+    add(ribbon(route, 20), 'route');
   } else {
     const v = lanes.map((l, i) => (l.valid ? i : -1)).filter((i) => i >= 0);
     const gc = v.length ? (centers[v[0]] + centers[v[v.length - 1]]) / 2 : 320;
-    fixed.push(`<div class="jv-fill" style="left:${gc - 15}px;width:30px;background:${V('j-case')}"></div>`);
-    fixed.push(`<div class="jv-fill" style="left:${gc - 10}px;width:20px;background:${V('route')}"></div>`);
+    add(rect(gc - 15, gc + 15, NEAR, FAR), 'case');
+    add(rect(gc - 10, gc + 10, NEAR, FAR), 'route');
   }
+  return { polys, arrows };
+}
+
+/** HTML da cena (canvas + bolinha, placa e distância por cima). */
+export function junctionScene(info, step) {
   const [l1, l2] = signTexts(step);
   const side = info.branch === 'right' || info.branch === 'left' ? info.branch : 'center';
   const arrow = info.branch === 'right' ? 'slight-right' : info.branch === 'left' ? 'slight-left' : 'straight';
   return `<div class="jv" role="img" aria-label="${esc(info.hint)}">`
-    + `<div class="jv-cam${geom.mirrored ? ' mirror' : ''}"><div class="jv-ground">${fixed.join('')}`
-    + `<div class="jv-loop"><svg viewBox="0 0 640 3840" width="640" height="3840" aria-hidden="true">${loop.join('')}</svg></div>`
-    + `<div class="jv-approach"><svg viewBox="0 0 640 3000" width="640" height="3000" aria-hidden="true">${ap.join('')}</svg></div>`
-    + `</div></div><div class="jv-fog"></div>`
+    + `<canvas class="jv-canvas" width="${SCENE.W}" height="${SCENE.H}"></canvas><div class="jv-fog"></div>`
     + `<div class="jv-puck"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 17-7-4-7 4z"/></svg></div>`
     + `<div class="jv-gantry ${side}"><div class="jv-gantry-in"><svg class="lane-ico" viewBox="0 0 48 48" aria-hidden="true">${laneGlyph(arrow)}</svg>`
     + `<span><b>${esc(l1)}</b><small>${esc(l2)}</small></span></div></div>`
@@ -210,22 +293,72 @@ export function junctionScene(info, step) {
     + '</div>';
 }
 
-/** Aplica um quadro na cena já montada (só transformações e opacidades: leve para 60 fps). */
-export function applyJunctionFrame(root, f) {
-  const q = (sel) => root.querySelector(sel);
-  q('.jv-approach').style.transform = `translateY(${f.approachY.toFixed(1)}px)`;
-  q('.jv-loop').style.transform = `translateY(${f.loopY.toFixed(1)}px)`;
-  root.querySelectorAll('.jv-dash').forEach((d) => { d.style.backgroundPositionY = `${f.dashY.toFixed(1)}px`; });
-  root.querySelectorAll('.jv-ok').forEach((e) => { e.style.opacity = f.ok.toFixed(3); });
-  root.querySelectorAll('.jv-bad').forEach((e) => { e.style.opacity = f.bad.toFixed(3); });
-  q('.jv-ground').style.transform = `rotateX(90deg) rotateZ(${f.turn.toFixed(2)}deg)`;
-  q('.jv-puck').style.transform = `translateX(${(f.puckX - 15).toFixed(1)}px)`;
-  const gEl = q('.jv-gantry');
+/** Caminhos da seta de faixa para o canvas (haste, ponta e se é espelhada). */
+export function glyphPaths(name) {
+  const base = MIRRORED[name] || (LANE_RIGHT[name] ? name : 'straight');
+  const [sh, hd] = LANE_RIGHT[base];
+  return { sh, hd, mirror: !!MIRRORED[name] };
+}
+
+const pathCache = new Map();
+function paths2d(name) {
+  if (!pathCache.has(name)) { const p = glyphPaths(name); pathCache.set(name, { sh: new Path2D(p.sh), hd: new Path2D(p.hd), mirror: p.mirror }); }
+  return pathCache.get(name);
+}
+
+/**
+ * Desenha um quadro: canvas + elementos por cima. `scale` = escala da cena na tela
+ * (para o canvas ficar nítido) e `colors` = cores do tema já lidas do CSS.
+ */
+export function drawJunction(root, geom, f, { scale = 1, colors }) {
+  const canvas = root.querySelector('.jv-canvas');
+  const dpr = (window.devicePixelRatio || 1) * scale;
+  const W = Math.round(SCENE.W * dpr), H = Math.round(SCENE.H * dpr);
+  if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = colors.bg;
+  ctx.fillRect(0, 0, SCENE.W, SCENE.H);
+  ctx.fillStyle = colors.ground;
+  ctx.fillRect(0, SCENE.EYE_Y, SCENE.W, SCENE.H - SCENE.EYE_Y);
+  const ops = sceneOps(geom, f);
+  for (const p of ops.polys) {
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = colors[p.fill];
+    ctx.beginPath();
+    p.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  for (const a of ops.arrows) {
+    const g = paths2d(a.glyph);
+    const [m0, m1, m2, m3, m4, m5] = a.m;
+    ctx.setTransform(dpr * m0, dpr * m1, dpr * m2, dpr * m3, dpr * m4, dpr * m5);
+    if (g.mirror) ctx.transform(-1, 0, 0, 1, 48, 0);
+    ctx.strokeStyle = ctx.fillStyle = colors[a.color];
+    ctx.lineWidth = 7;
+    ctx.stroke(g.sh);
+    ctx.fill(g.hd);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // por cima: bolinha, placa e distância
+  root.querySelector('.jv-puck').style.transform = `translateX(${(f.puckX - 15).toFixed(1)}px)`;
+  const gEl = root.querySelector('.jv-gantry');
   const dir = gEl.classList.contains('left') ? -1 : gEl.classList.contains('right') ? 1 : 0;
   gEl.style.transform = `translate(${(dir * 70 * f.gantryOut).toFixed(1)}px, ${(-70 * f.gantryOut).toFixed(1)}px) scale(${f.gantryScale.toFixed(3)})`;
   gEl.style.opacity = (1 - f.gantryOut).toFixed(3);
-  const chip = q('.jv-chip');
+  const chip = root.querySelector('.jv-chip');
   const text = f.chip == null ? '' : `${f.chip} m`;
   if (chip.textContent !== text) chip.textContent = text;
   chip.hidden = f.chip == null;
+}
+
+/** Cores do tema usadas pelo canvas (lidas uma vez por cena e quando o tema muda). */
+export function junctionColors(el) {
+  const cs = getComputedStyle(el);
+  const v = (n, fb) => cs.getPropertyValue(`--${n}`).trim() || fb;
+  return { bg: v('j-bg', '#0E1013'), ground: v('j-ground', '#0C0F13'), asphalt: v('j-asphalt', '#2A2F37'), mark: v('j-mark', '#E9EDF2'),
+    dim: v('j-mark-dim', '#5B6472'), route: v('route', '#C8FF3D'), case: v('j-case', '#0B0D10'), black: '#000000' };
 }

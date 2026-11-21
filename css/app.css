@@ -438,15 +438,7 @@ svg { flex: none; }
 /* Visão da junção em movimento: cena fixa de 366 × 250 escalada para a largura do painel */
 .jv-box { position: relative; overflow: hidden; height: calc(250px * var(--jv-k, 1)); background: var(--j-bg); }
 .jv { position: absolute; left: 0; top: 0; width: 366px; height: 250px; overflow: hidden; transform-origin: 0 0; transform: translateX(var(--jv-x, 0px)) scale(var(--jv-k, 1)); background: var(--j-bg); }
-.jv-cam { position: absolute; inset: 0; perspective: 420px; perspective-origin: 50% 58px; }
-.jv-cam.mirror { transform: scaleX(-1); }
-.jv-ground { position: absolute; left: 50%; bottom: 0; width: 640px; height: 3000px; margin-left: -320px; transform-origin: 50% 100%; transform: rotateX(90deg); overflow: hidden; background: var(--j-ground); }
-.jv-fill { position: absolute; top: 0; height: 3000px; }
-.jv-ok, .jv-bad { opacity: 0; }
-.jv-dash { position: absolute; top: 0; width: 4px; height: 3000px; background: repeating-linear-gradient(to bottom, var(--j-mark) 0 48px, transparent 48px 96px); }
-.jv-loop { position: absolute; left: 0; top: -640px; width: 640px; height: 3840px; will-change: transform; }
-.jv-approach { position: absolute; left: 0; top: 0; width: 640px; height: 3000px; will-change: transform; }
-.jv-loop svg, .jv-approach svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.jv-canvas { position: absolute; left: 0; top: 0; width: 366px; height: 250px; display: block; }
 .jv-fog { position: absolute; left: 0; right: 0; top: 0; height: 130px; pointer-events: none; background: linear-gradient(var(--j-bg) 0, var(--j-bg) 52px, transparent 128px); }
 .jv-puck { position: absolute; left: 0; top: 207px; width: 30px; height: 30px; border-radius: 50%; box-sizing: border-box; display: grid; place-items: center; background: var(--puck); border: 2px solid var(--j-case); box-shadow: 0 0 0 7px color-mix(in srgb, var(--puck) 22%, transparent); will-change: transform; }
 .jv-puck svg { width: 14px; height: 14px; fill: var(--puck-ink); }

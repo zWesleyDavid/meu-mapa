@@ -1,7 +1,7 @@
 // Faixas e visão da junção (js/junction.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeLanes, isComplex, junctionScene, junctionGeometry, junctionFrame, laneIcon, SCENE } from '../js/junction.js';
+import { analyzeLanes, isComplex, junctionScene, junctionGeometry, junctionFrame, sceneOps, projectPoint, glyphPaths, laneIcon, SCENE } from '../js/junction.js';
 
 const lanes = (...spec) => spec.map(([ind, valid]) => ({ indications: ind, valid }));
 
@@ -46,6 +46,7 @@ test('junctionScene: nomes vindos do mapa são escapados (sem HTML injetado)', (
   const info = analyzeLanes({ modifier: 'right', lanes: lanes([['straight'], false], [['right'], true]) });
   const html = junctionScene(info, { name: '<img src=x onerror=alert(1)>', modifier: 'right', destinations: 'A"B: <b>C</b>' });
   assert.ok(html.startsWith('<div class="jv"'));
+  assert.ok(html.includes('<canvas class="jv-canvas"'));
   assert.ok(!html.includes('<img'), 'tag do nome não pode virar HTML');
   assert.ok(!html.includes('<b>C'), 'tag do destino não pode virar HTML');
   assert.ok(html.includes('&lt;'), 'aparece como texto escapado');
@@ -84,16 +85,69 @@ test('junctionFrame: a cena anda pela distância percorrida (não por relógio)'
   const g = junctionGeometry(exitRight());
   const a = junctionFrame(g, 300, 1000);
   const b = junctionFrame(g, 290, 1010);
-  assert.equal(b.approachY - a.approachY, 10 * SCENE.PX_PER_M, '10 m mais perto = 60 px no chão');
-  assert.equal(b.dashY, (a.dashY + 10 * SCENE.PX_PER_M) % SCENE.DASH, 'tracejado anda junto');
+  assert.equal(a.split - b.split, 10 * SCENE.PX_PER_M, '10 m mais perto = bifurcação 60 px mais perto');
+  assert.equal(b.phase - a.phase, 10 * SCENE.PX_PER_M, 'tracejado e setas andam junto');
   assert.deepEqual(junctionFrame(g, 300, 1000), a, 'parado = mesma imagem');
 });
 
 test('junctionFrame: a bifurcação chega até a bolinha quando a distância zera', () => {
   const g = junctionGeometry(exitRight());
-  const f = junctionFrame(g, 0, 500);
-  assert.equal(f.approachY + SCENE.SPLIT_Y, SCENE.CAR_Y);
-  assert.equal(junctionFrame(g, -20, 520).approachY, f.approachY, 'não passa do ponto');
+  assert.equal(junctionFrame(g, 0, 500).split, SCENE.CAR_D);
+  assert.equal(junctionFrame(g, -20, 520).split, SCENE.CAR_D, 'não passa do ponto');
+});
+
+test('projectPoint: perto embaixo e largo, longe perto do horizonte; espelho inverte', () => {
+  const [x0, y0] = projectPoint(320, 0);
+  assert.equal(x0, SCENE.W / 2);
+  assert.equal(y0, SCENE.H, 'pé da tela');
+  const far = projectPoint(320, 100000);
+  assert.ok(far[1] > SCENE.EYE_Y && far[1] - SCENE.EYE_Y < 2, 'longe encosta no horizonte');
+  assert.ok(projectPoint(400, 500)[0] - SCENE.W / 2 < projectPoint(400, 0)[0] - SCENE.W / 2, 'longe fica mais estreito');
+  const [mx] = projectPoint(400, 50, 0, true);
+  assert.ok(Math.abs(mx - (SCENE.W - projectPoint(400, 50)[0])) < 1e-9);
+});
+
+const finiteIn = (ops) => ops.polys.every((p) => p.pts.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && y >= SCENE.EYE_Y - 0.01 && y <= SCENE.H + 40));
+
+test('sceneOps: polígonos recortados e dentro da tela, nas três situações e em toda a aproximação', () => {
+  const straight = junctionGeometry(analyzeLanes({ modifier: 'straight', lanes: lanes([['left'], false], [['straight'], true], [['right'], false]) }));
+  for (const g of [junctionGeometry(exitRight()), junctionGeometry(exitLeft()), straight]) {
+    for (const r of [500, 320, 200, 100, 30, 5, 0]) {
+      const ops = sceneOps(g, junctionFrame(g, r, 1234 - r));
+      assert.ok(ops.polys.length > 5);
+      assert.ok(finiteIn(ops), `r=${r}`);
+      assert.ok(ops.arrows.every((a) => a.m.every(Number.isFinite)));
+    }
+  }
+});
+
+test('sceneOps: a parte perto da bolinha é desenhada (o que cortava no celular)', () => {
+  const g = junctionGeometry(analyzeLanes({ modifier: 'slight right', lanes: lanes([['straight'], false], [['straight'], false], [['slight right'], true]) }));
+  const ops = sceneOps(g, junctionFrame(g, 310, 5000));
+  // faixa da alça (asfalto) tem que chegar até o pé da tela
+  const nearRamp = ops.polys.filter((p) => p.fill === 'asphalt' && Math.max(...p.pts.map((q) => q[1])) >= SCENE.H);
+  assert.ok(nearRamp.length >= 2, 'pista que segue + faixa da alça chegando até embaixo');
+  assert.ok(ops.arrows.some((a) => a.m[5] > 150), 'setas perto da bolinha também');
+  assert.ok(ops.polys.some((p) => p.fill === 'route' && p.alpha === 1 && Math.max(...p.pts.map((q) => q[1])) >= SCENE.H), 'fita da rota desde embaixo');
+});
+
+test('sceneOps: setas e tracejado andam em direção à tela quando você avança', () => {
+  const g = junctionGeometry(exitRight());
+  const ys = (r, along) => sceneOps(g, junctionFrame(g, r, along)).arrows.map((a) => a.m[5]).sort((p, q) => p - q);
+  const a = ys(300, 1000), b = ys(299, 1001);
+  assert.ok(b.some((y, i) => y > a[i]), 'setas descem na tela');
+});
+
+test('sceneOps: saída à esquerda fica do lado esquerdo da tela', () => {
+  const l = junctionGeometry(exitLeft());
+  const ops = sceneOps(l, junctionFrame(l, 120, 0));
+  const routeX = ops.polys.filter((p) => p.fill === 'route' && p.alpha === 1).flatMap((p) => p.pts.map((q) => q[0]));
+  assert.ok(Math.min(...routeX) < SCENE.W / 2, 'a fita da rota vai para a esquerda');
+});
+
+test('glyphPaths: esquerda usa o desenho da direita espelhado', () => {
+  assert.deepEqual(glyphPaths('left'), { ...glyphPaths('right'), mirror: true });
+  assert.equal(glyphPaths('xyz').sh, glyphPaths('straight').sh);
 });
 
 test('junctionFrame: faixa certa acende antes; as outras apagam perto', () => {

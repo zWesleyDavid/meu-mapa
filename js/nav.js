@@ -8,7 +8,7 @@ import { getRoutes, signLabel } from './routing.js';
 import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
 import { pauseLocationEvents } from './location.js';
-import { analyzeLanes, isComplex, laneIcon, junctionScene, junctionGeometry, junctionFrame, applyJunctionFrame } from './junction.js';
+import { analyzeLanes, isComplex, laneIcon, junctionScene, junctionGeometry, junctionFrame, drawJunction, junctionColors } from './junction.js';
 import { maneuverIcon } from './maneuvers.js';
 import { signName, getSetting, setSetting } from './settings.js';
 
@@ -379,7 +379,7 @@ function render(progress, speed) {
 // A cena anda pela distância percorrida. Entre uma leitura do GPS e outra (~1 s), ela segue na
 // velocidade atual e corrige aos poucos o desvio quando a próxima leitura chega.
 const reduceMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-const jv = { el: null, geom: null, at: 0, target: 0, shown: 0, speed: 0, raf: 0, last: 0 };
+const jv = { el: null, geom: null, at: 0, target: 0, shown: 0, speed: 0, raf: 0, last: 0, colors: null, theme: null };
 
 function junctionStart(info, step, progress, speed) {
   junctionPause();
@@ -406,7 +406,9 @@ function junctionDraw() {
   const k = Math.min(w / 366, maxH / 250);
   ui.junction.style.setProperty('--jv-k', k.toFixed(4));
   ui.junction.style.setProperty('--jv-x', `${((w - 366 * k) / 2).toFixed(1)}px`);
-  applyJunctionFrame(jv.el, junctionFrame(jv.geom, jv.at - jv.shown, jv.shown));
+  const theme = document.documentElement.dataset.theme;
+  if (!jv.colors || jv.theme !== theme) { jv.colors = junctionColors(ui.junction); jv.theme = theme; }
+  drawJunction(jv.el, jv.geom, junctionFrame(jv.geom, jv.at - jv.shown, jv.shown), { scale: k, colors: jv.colors });
 }
 
 function junctionTick(t) {
