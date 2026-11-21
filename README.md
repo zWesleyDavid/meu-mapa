@@ -66,7 +66,7 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português
 - **Partida, chegada e até 3 paradas**: toque em DE/PARA ou em "+ Adicionar parada" e busque ou toque no mapa; também pelo toque longo ("Adicionar como parada"); inverter inverte a viagem toda
 - **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
-  trecho já percorrido em cinza, **zoom dinâmico** (afasta na rodovia, aproxima perto das manobras),
+  trecho já percorrido em cinza, **zoom dinâmico** (contínuo pela velocidade, tabela em `CONFIG.nav.zoomBySpeed`; aproxima perto das manobras),
   **faixas** (barra a até ~800 m e **visão da junção em movimento** em pontos confusos, a partir dos dados de faixa do OSM: as faixas andam na sua velocidade real, a faixa certa acende, as outras apagam e a vista acompanha a curva), tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.

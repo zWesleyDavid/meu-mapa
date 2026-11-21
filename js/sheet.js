@@ -10,6 +10,7 @@ const mq = window.matchMedia(CONFIG.layout.column);
 
 let current = 'peek';
 let peekPx = 150;
+let contentPx = Infinity; // altura do conteúdo: "meio" não abre além dele (sem espaço vazio embaixo)
 
 const isDesktop = () => mq.matches;
 const sheetHeight = () => sheet.getBoundingClientRect().height;
@@ -19,7 +20,7 @@ function visibleFor(stateName) {
   switch (stateName) {
     case 'hidden': return 0;
     case 'peek': return Math.min(peekPx, h * 0.5);
-    case 'half': return Math.min(window.innerHeight * 0.5, h);
+    case 'half': return Math.min(window.innerHeight * 0.5, h, Math.max(contentPx, peekPx));
     case 'full': return h;
     default: return peekPx;
   }
@@ -40,6 +41,7 @@ function apply(visible, animate = true) {
 
 export function setSheet(stateName, opts = {}) {
   if (opts.peek != null) peekPx = opts.peek;
+  contentPx = measureContent();
   current = stateName;
   sheet.dataset.state = stateName;
   body.style.overflowY = isDesktop() || stateName === 'full' ? 'auto' : 'hidden';
@@ -59,6 +61,28 @@ export function measurePeek() {
   const rel = r.bottom - top + (body.scrollTop || 0);
   return Math.ceil(Math.max(rel, handleH + 60) + 14);
 }
+
+/** Altura até o fim do conteúdo (mais a margem de baixo), independente da translação atual. */
+function measureContent() {
+  const last = body.lastElementChild;
+  if (!last) return Infinity;
+  const top = sheet.getBoundingClientRect().top;
+  const rel = last.getBoundingClientRect().bottom - top + (body.scrollTop || 0);
+  const padBottom = parseFloat(getComputedStyle(body).paddingBottom) || 0;
+  return Math.ceil(rel + padBottom + 4);
+}
+
+// Conteúdo que muda depois de aberto (detalhes chegando, rotas calculadas): o "meio" acompanha.
+let refit = 0;
+new MutationObserver(() => {
+  if (refit) return;
+  refit = requestAnimationFrame(() => {
+    refit = 0;
+    if (drag || isDesktop()) return;
+    contentPx = measureContent();
+    if (current === 'half') apply(visibleFor('half'));
+  });
+}).observe(body, { childList: true, subtree: true, characterData: true });
 
 // ---------------- Arrastar ----------------
 let drag = null;
