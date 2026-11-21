@@ -183,6 +183,20 @@ function toStep(raw, leg = 0, legCount = 1) {
   };
 }
 
+/**
+ * Texto principal da placa de um passo: o nome da via; sem nome, o destino da placa
+ * (ex.: "Centro" de "SC-401: Centro, Rodoviária"), o número da via ou, por último, a instrução curta.
+ * `instruction` indica que o texto é uma instrução (ex.: "Mantenha-se à direita"), não um nome.
+ */
+export function signLabel(step) {
+  if (step.name) return { text: step.name, instruction: false };
+  const dest = (step.destinations || '').split(':').pop().split(',').map((x) => x.trim()).filter(Boolean)[0];
+  if (dest) return { text: dest, instruction: false };
+  const ref = (step.ref || '').split(';')[0].trim();
+  if (ref) return { text: ref, instruction: false };
+  return { text: step.short || '', instruction: true };
+}
+
 /** Une passos triviais (ex.: "continue" de poucos metros) para uma lista mais limpa. */
 export function cleanSteps(steps) {
   const out = [];

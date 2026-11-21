@@ -162,3 +162,14 @@ test('cleanSteps: ao juntar um passo curto, soma também o tempo', () => {
   assert.equal(out[0].distance, 120);
   assert.equal(out[0].duration, 13);
 });
+
+import { signLabel } from '../js/routing.js';
+
+test('signLabel: nome da via; sem nome, destino da placa, número da via ou instrução curta', () => {
+  assert.deepEqual(signLabel({ name: 'Av. Paulo Fontes', short: 'x' }), { text: 'Av. Paulo Fontes', instruction: false });
+  assert.deepEqual(signLabel({ name: '', destinations: 'SC-401: Centro, Rodoviária', short: 'Saída à direita' }), { text: 'Centro', instruction: false });
+  assert.deepEqual(signLabel({ name: '', destinations: 'Aeroporto', short: 'x' }), { text: 'Aeroporto', instruction: false });
+  assert.deepEqual(signLabel({ name: '', ref: 'SC-401;BR-101', short: 'x' }), { text: 'SC-401', instruction: false });
+  assert.deepEqual(signLabel({ name: '', short: 'Mantenha-se à direita' }), { text: 'Mantenha-se à direita', instruction: true });
+  assert.deepEqual(signLabel({ name: '' }), { text: '', instruction: true });
+});

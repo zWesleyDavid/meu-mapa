@@ -4,7 +4,7 @@ import { $, bus, state, store, el, toast } from './core.js';
 import { icon } from './icons.js';
 import * as M from './map.js';
 import { prepareRoute, snap, pointAt, distance, simSpeed } from './geo.js';
-import { getRoutes } from './routing.js';
+import { getRoutes, signLabel } from './routing.js';
 import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
 import { pauseLocationEvents } from './location.js';
@@ -312,9 +312,13 @@ function render(progress, speed) {
       ui.sign.classList.add('swap');
     }
     ui.icon.innerHTML = maneuverIcon(step.icon);
+    const label = step.isStop || step.type === 'arrive' ? null : signLabel(step);
     ui.street.textContent = step.isStop ? stopLabel(step.stopIndex)
-      : step.type === 'arrive' ? (nav.destination.name || 'Destino') : (signName(step.name) || step.short);
+      : step.type === 'arrive' ? (nav.destination.name || 'Destino') : (label.instruction ? label.text : signName(label.text));
+    // instrução sem nome de via (ex.: "Vire acentuadamente à direita") pode ocupar 2 linhas mesmo na placa compacta
+    ui.street.classList.toggle('instr', !!label?.instruction);
     ui.street.classList.toggle('long', ui.street.textContent.length > 22);
+    ui.street.classList.toggle('xlong', ui.street.textContent.length > 26);
     ui.dist.textContent = fmtDistance(d).toUpperCase();
     lanes = analyzeLanes(step);
     showJunction = !!lanes && isComplex(lanes, step, after) && d > 12 && d < Math.max(320, v * 22);
