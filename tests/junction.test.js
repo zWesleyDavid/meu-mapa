@@ -1,7 +1,7 @@
 // Faixas e visão da junção (js/junction.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeLanes, isComplex, junctionSVG, laneIcon } from '../js/junction.js';
+import { analyzeLanes, isComplex, junctionScene, junctionGeometry, junctionFrame, laneIcon, SCENE } from '../js/junction.js';
 
 const lanes = (...spec) => spec.map(([ind, valid]) => ({ indications: ind, valid }));
 
@@ -42,13 +42,86 @@ test('isComplex: 3+ faixas ou manobras coladas', () => {
   assert.equal(isComplex({ N: 2 }, { at: 0 }, { at: 400 }), false);
 });
 
-test('junctionSVG: nomes vindos do mapa são escapados (sem HTML injetado)', () => {
+test('junctionScene: nomes vindos do mapa são escapados (sem HTML injetado)', () => {
   const info = analyzeLanes({ modifier: 'right', lanes: lanes([['straight'], false], [['right'], true]) });
-  const svg = junctionSVG(info, { name: '<img src=x onerror=alert(1)>', modifier: 'right', destinations: 'A"B: <b>C</b>' });
-  assert.ok(svg.startsWith('<svg'));
-  assert.ok(!svg.includes('<img'), 'tag do nome não pode virar HTML');
-  assert.ok(!svg.includes('<b>'), 'tag do destino não pode virar HTML');
-  assert.ok(svg.includes('&lt;'), 'aparece como texto escapado');
+  const html = junctionScene(info, { name: '<img src=x onerror=alert(1)>', modifier: 'right', destinations: 'A"B: <b>C</b>' });
+  assert.ok(html.startsWith('<div class="jv"'));
+  assert.ok(!html.includes('<img'), 'tag do nome não pode virar HTML');
+  assert.ok(!html.includes('<b>C'), 'tag do destino não pode virar HTML');
+  assert.ok(html.includes('&lt;'), 'aparece como texto escapado');
+});
+
+const exitRight = () => analyzeLanes({ modifier: 'slight right', lanes: lanes([['straight'], false], [['straight'], false], [['straight'], false], [['slight right'], true]) });
+const exitLeft = () => analyzeLanes({ modifier: 'left', lanes: lanes([['left'], true], [['straight'], false], [['straight'], false]) });
+
+test('junctionGeometry: saída à direita — alça com a última faixa, bolinha vai para ela', () => {
+  const g = junctionGeometry(exitRight());
+  assert.equal(g.N, 4);
+  assert.equal(g.ramp, true);
+  assert.equal(g.g, 3, 'a alça começa na 4ª faixa');
+  assert.equal(g.mirrored, false);
+  assert.equal(g.start, 2);
+  assert.equal(g.target, 3);
+  assert.equal(g.x0 + g.N * g.w, 320 + (g.N * g.w) / 2, 'pista centralizada no chão');
+});
+
+test('junctionGeometry: saída à esquerda é a da direita espelhada', () => {
+  const g = junctionGeometry(exitLeft());
+  assert.equal(g.mirrored, true);
+  assert.equal(g.g, 2, 'no desenho espelhado a faixa da esquerda vira a última');
+  assert.equal(g.lanes[2].glyph, 'right', 'seta "esquerda" é desenhada como "direita" e o espelho a desvira');
+  assert.equal(g.lanes[2].valid, true);
+});
+
+test('junctionGeometry: seguir em frente não tem alça', () => {
+  const info = analyzeLanes({ modifier: 'straight', lanes: lanes([['left'], false], [['straight'], true], [['right'], false]) });
+  const g = junctionGeometry(info);
+  assert.equal(g.ramp, false);
+  assert.equal(g.target, 1);
+});
+
+test('junctionFrame: a cena anda pela distância percorrida (não por relógio)', () => {
+  const g = junctionGeometry(exitRight());
+  const a = junctionFrame(g, 300, 1000);
+  const b = junctionFrame(g, 290, 1010);
+  assert.equal(b.approachY - a.approachY, 10 * SCENE.PX_PER_M, '10 m mais perto = 60 px no chão');
+  assert.equal(b.dashY, (a.dashY + 10 * SCENE.PX_PER_M) % SCENE.DASH, 'tracejado anda junto');
+  assert.deepEqual(junctionFrame(g, 300, 1000), a, 'parado = mesma imagem');
+});
+
+test('junctionFrame: a bifurcação chega até a bolinha quando a distância zera', () => {
+  const g = junctionGeometry(exitRight());
+  const f = junctionFrame(g, 0, 500);
+  assert.equal(f.approachY + SCENE.SPLIT_Y, SCENE.CAR_Y);
+  assert.equal(junctionFrame(g, -20, 520).approachY, f.approachY, 'não passa do ponto');
+});
+
+test('junctionFrame: faixa certa acende antes; as outras apagam perto', () => {
+  const g = junctionGeometry(exitRight());
+  const far = junctionFrame(g, 330, 0), mid = junctionFrame(g, 200, 0), near = junctionFrame(g, 60, 0);
+  assert.equal(far.ok, 0);
+  assert.ok(mid.ok > 0.15);
+  assert.equal(mid.bad > 0 && mid.bad < near.bad, true);
+  assert.ok(Math.abs(near.bad - 0.45) < 1e-9);
+});
+
+test('junctionFrame: bolinha muda de faixa entre 260 m e 140 m, para o lado certo', () => {
+  const r = junctionGeometry(exitRight()), l = junctionGeometry(exitLeft());
+  assert.ok(junctionFrame(r, 100, 0).puckX > junctionFrame(r, 300, 0).puckX, 'direita: vai para a direita');
+  assert.ok(junctionFrame(l, 100, 0).puckX < junctionFrame(l, 300, 0).puckX, 'esquerda: vai para a esquerda');
+  assert.equal(junctionFrame(r, 300, 0).puckX, junctionFrame(r, 270, 0).puckX, 'antes de 260 m não mexe');
+});
+
+test('junctionFrame: vira só nos últimos 35 m e só quando há alça; placa sai nos últimos 40 m', () => {
+  const g = junctionGeometry(exitRight());
+  assert.equal(junctionFrame(g, 50, 0).turn, 0);
+  assert.equal(junctionFrame(g, 0, 0).turn, -20);
+  assert.equal(junctionFrame(g, 100, 0).gantryOut, 0);
+  assert.equal(junctionFrame(g, 0, 0).gantryOut, 1);
+  assert.equal(junctionFrame(g, 10, 0).chip, null, 'distância some no finalzinho');
+  assert.equal(junctionFrame(g, 123, 0).chip, 120);
+  const straight = junctionGeometry(analyzeLanes({ lanes: lanes([['left'], false], [['straight'], true], [['right'], false]) }));
+  assert.equal(junctionFrame(straight, 0, 0).turn, 0);
 });
 
 test('laneIcon: desenho desconhecido usa "em frente"', () => {

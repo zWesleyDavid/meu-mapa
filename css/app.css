@@ -435,7 +435,34 @@ svg { flex: none; }
 .lane-cell.on svg { color: var(--strip-text); }
 .lane-label { font: 700 16px var(--signf); letter-spacing: .04em; text-transform: uppercase; color: var(--strip-label); text-align: right; line-height: 1.1; }
 .nav-junction { background: var(--j-bg); }
-.nav-junction > svg { display: block; width: 100%; height: auto; }
+/* Visão da junção em movimento: cena fixa de 366 × 250 escalada para a largura do painel */
+.jv-box { position: relative; overflow: hidden; height: calc(250px * var(--jv-k, 1)); background: var(--j-bg); }
+.jv { position: absolute; left: 0; top: 0; width: 366px; height: 250px; overflow: hidden; transform-origin: 0 0; transform: translateX(var(--jv-x, 0px)) scale(var(--jv-k, 1)); background: var(--j-bg); }
+.jv-cam { position: absolute; inset: 0; perspective: 420px; perspective-origin: 50% 58px; }
+.jv-cam.mirror { transform: scaleX(-1); }
+.jv-ground { position: absolute; left: 50%; bottom: 0; width: 640px; height: 3000px; margin-left: -320px; transform-origin: 50% 100%; transform: rotateX(90deg); overflow: hidden; background: var(--j-ground); }
+.jv-fill { position: absolute; top: 0; height: 3000px; }
+.jv-ok, .jv-bad { opacity: 0; }
+.jv-dash { position: absolute; top: 0; width: 4px; height: 3000px; background: repeating-linear-gradient(to bottom, var(--j-mark) 0 48px, transparent 48px 96px); }
+.jv-loop { position: absolute; left: 0; top: -640px; width: 640px; height: 3840px; will-change: transform; }
+.jv-approach { position: absolute; left: 0; top: 0; width: 640px; height: 3000px; will-change: transform; }
+.jv-loop svg, .jv-approach svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.jv-fog { position: absolute; left: 0; right: 0; top: 0; height: 130px; pointer-events: none; background: linear-gradient(var(--j-bg) 0, var(--j-bg) 52px, transparent 128px); }
+.jv-puck { position: absolute; left: 0; top: 207px; width: 30px; height: 30px; border-radius: 50%; box-sizing: border-box; display: grid; place-items: center; background: var(--puck); border: 2px solid var(--j-case); box-shadow: 0 0 0 7px color-mix(in srgb, var(--puck) 22%, transparent); will-change: transform; }
+.jv-puck svg { width: 14px; height: 14px; fill: var(--puck-ink); }
+.jv-gantry { position: absolute; top: 10px; background: #00703C; border: 2px solid var(--route); border-radius: 8px; padding: 3px; max-width: 200px; will-change: transform, opacity; }
+.jv-gantry.right { right: 10px; transform-origin: 100% 0; }
+.jv-gantry.left { left: 10px; transform-origin: 0 0; }
+.jv-gantry.center { left: 50%; margin-left: -90px; width: 180px; transform-origin: 50% 0; }
+.jv-gantry-in { border: 2px solid #FFFFFF; border-radius: 5px; padding: 4px 9px 4px 5px; display: flex; align-items: center; gap: 7px; color: #FFFFFF; }
+.jv-gantry-in svg { width: 22px; height: 22px; flex: none; color: #FFFFFF; }
+.jv-gantry-in span { display: flex; flex-direction: column; min-width: 0; font: 800 15px/1.05 var(--signf); text-transform: uppercase; }
+.jv-gantry-in b, .jv-gantry-in small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jv-gantry-in small { font-size: 11px; opacity: .85; }
+.jv-chip { position: absolute; top: 12px; padding: 4px 10px; border-radius: 10px; background: color-mix(in srgb, var(--j-bg) 85%, transparent); border: 1px solid color-mix(in srgb, var(--j-mark) 18%, transparent); color: var(--route); font: 700 17px var(--mono); }
+.jv-chip.left { left: 10px; }
+.jv-chip.right { right: 10px; }
+.jv-chip[hidden] { display: none; }
 .j-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; background: var(--strip-bg); color: var(--strip-text); font: 700 17px var(--signf); letter-spacing: .03em; text-transform: uppercase; }
 .j-mini { display: flex; gap: 4px; flex: none; }
 .j-mini i { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; }
@@ -593,7 +620,6 @@ body.navigating .toast { bottom: calc(200px + var(--safe-bottom)); }
   .lane-cell { width: 34px; height: 32px; }
   .lane-cell svg { width: 22px; height: 22px; }
   .lane-label { font-size: 14px; }
-  .nav-junction > svg { max-height: calc(100dvh - 240px); }
   .j-foot { font-size: 14px; padding: 6px 10px; }
   .nav-bottom { padding: 6px 6px 6px 4px; border-radius: 18px; gap: 6px; }
   .nav-bottom.collapsed { width: 150px; padding: 6px 6px 6px 2px; }

@@ -1,16 +1,6 @@
 // Faixas: análise dos dados de faixa do OSRM, barra de faixas e visão 2D esquemática da junção.
 import { signName } from './settings.js';
 
-const ARROW = {
-  straight: 'M12 21V5M6 11l6-6 6 6',
-  left: 'M16 21v-7a5 5 0 0 0-5-5H5M9 5L5 9l4 4',
-  right: 'M8 21v-7a5 5 0 0 1 5-5h6M15 5l4 4-4 4',
-  'slight-right': 'M9 21v-8l7-7M11 6h5v5',
-  'slight-left': 'M15 21v-8L8 6M13 6H8v5',
-  'straight-right': 'M9 21V5M4.5 9.5L9 5l4.5 4.5M9 15l7-7M12 8h4v4',
-  'straight-left': 'M15 21V5M10.5 9.5L15 5l4.5 4.5M15 15L8 8M12 8H8v4',
-  uturn: 'M8 21V9a4 4 0 0 1 8 0v4M12 10l4 4 4-4',
-};
 const MIRROR = {
   left: 'right', right: 'left', 'slight-left': 'slight-right', 'slight-right': 'slight-left',
   'straight-left': 'straight-right', 'straight-right': 'straight-left', straight: 'straight', uturn: 'uturn',
@@ -99,122 +89,143 @@ function signTexts(step) {
   return [cut(l1.toUpperCase(), 17), cut((rest.join(' · ') || side).toUpperCase(), 24)];
 }
 
-// ---------------- Visão 2D ----------------
-const W = 366;
-const H = 250;
+// ---------------- Visão da junção em movimento ----------------
+// Cena em 3D do próprio navegador (CSS): um "chão" de 640 × 3000 deitado com perspectiva.
+// A estrutura é montada uma vez por manobra (junctionScene) e, a cada quadro, a nav.js aplica
+// junctionFrame(): as faixas andam conforme a distância real percorrida (não por relógio).
+export const SCENE = { W: 366, H: 250, PX_PER_M: 6, CAR_Y: 2928, SPLIT_Y: 420, DASH: 96, LOOP: 640 };
 const V = (name) => `var(--${name})`;
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+const smooth = (x) => { const t = clamp01(x); return t * t * (3 - 2 * t); };
 
-function groundArrow(name, cx, cy, size, ok) {
-  const sc = size / 24;
-  return `<g transform="translate(${(cx - size / 2).toFixed(1)} ${(cy - size * 0.36).toFixed(1)}) scale(${sc.toFixed(3)} ${(sc * 0.72).toFixed(3)})" `
-    + `style="fill:none;stroke:${ok ? V('j-mark') : V('j-mark-dim')};stroke-width:3.4;stroke-linecap:square;stroke-linejoin:miter"><path d="${ARROW[name]}"/></g>`;
+/**
+ * Geometria da cena para a manobra. Saída à esquerda é desenhada como saída à direita com as
+ * faixas em ordem inversa e espelhada na tela (mirrored). Faixas em coordenadas do chão.
+ */
+export function junctionGeometry(info) {
+  const N = info.lanes.length;
+  const mirrored = info.branch === 'left';
+  const lanes = mirrored ? info.lanes.slice().reverse().map((l) => ({ ...l, glyph: MIRROR[l.glyph] || l.glyph })) : info.lanes.slice();
+  const w = Math.min(76, 340 / N);
+  const x0 = 320 - (N * w) / 2;
+  const centers = lanes.map((_, i) => x0 + (i + 0.5) * w);
+  // grupo que sai pela alça (só quando há saída para um lado)
+  const g = info.branch === 'right' ? info.k : mirrored ? N - info.k : N;
+  const valid = lanes.map((l, i) => (l.valid ? i : -1)).filter((i) => i >= 0);
+  // a bolinha começa numa faixa do meio e vai para a faixa certa mais próxima
+  const start = Math.min(N - 1, Math.max(0, Math.round((N - 1) / 2)));
+  const target = valid.length ? valid.reduce((a, b) => (Math.abs(b - start) < Math.abs(a - start) ? b : a)) : start;
+  return { N, w, x0, centers, lanes, g, ramp: g < N, mirrored, start, target, branch: info.branch };
 }
 
-/** Desenha a pista com saída para a direita (a saída para a esquerda é o espelho disso). */
-function drawRight(lanes, k, mirrored) {
-  const N = lanes.length;
-  const xs = Array.from({ length: N + 1 }, (_, i) => 10 + (i * (W - 20)) / N);
-  const yTop = 58, ySplit = 160, yIn = 64, yOut = 128;
-  const vx = xs[k];
-  const lx = (xb, y) => xb + (vx - xb) * ((H - y) / (H + 220));
-  const xr = lx(xs[N], ySplit);
-  const o = [];
-  const st = (s) => `style="${s}"`;
-  // pista que segue reto
-  o.push(`<path d="M${xs[0]} ${H}L${lx(xs[0], yTop).toFixed(1)} ${yTop}L${vx} ${yTop}L${vx} ${H}Z" ${st(`fill:${V('j-asphalt')}`)}/>`);
-  // alça
-  const ramp = `M${vx} ${H}L${vx} ${ySplit}C${vx + 6} ${ySplit - 45} ${vx + 60} ${ySplit - 80} ${W} ${yIn}L${W} ${yOut}C${xr + 20} ${yOut + 6} ${xr} ${ySplit - 14} ${xr.toFixed(1)} ${ySplit}L${xs[N]} ${H}Z`;
-  o.push(`<path d="${ramp}" ${st(`fill:${V('j-asphalt')}`)}/>`);
-  o.push(`<path d="${ramp}" ${st(`fill:${V('j-fill')}`)}/>`);
-  // bordas
-  const line = (d, dash) => `<path d="${d}" ${st(`fill:none;stroke:${V('j-mark')};stroke-width:3${dash ? ';stroke-dasharray:16 14' : ''}`)}/>`;
-  o.push(line(`M${xs[0]} ${H}L${lx(xs[0], yTop).toFixed(1)} ${yTop}`));
-  o.push(line(`M${vx} ${ySplit - 2}L${vx} ${yTop}`));
-  o.push(line(`M${vx} ${ySplit}C${vx + 6} ${ySplit - 45} ${vx + 60} ${ySplit - 80} ${W} ${yIn}`));
-  o.push(line(`M${xs[N]} ${H}L${xr.toFixed(1)} ${ySplit}C${xr} ${ySplit - 14} ${xr + 20} ${yOut + 6} ${W} ${yOut}`));
-  // divisórias
-  for (let i = 1; i < k; i++) o.push(line(`M${xs[i]} ${H}L${lx(xs[i], yTop).toFixed(1)} ${yTop}`, true));
-  o.push(line(`M${vx} ${H}L${vx} ${ySplit}`, true));
-  for (let j = k + 1; j < N; j++) {
-    const xm = lx(xs[j], ySplit);
-    const yEnd = yIn + ((yOut - yIn) * (j - k)) / (N - k);
-    o.push(line(`M${xs[j]} ${H}L${xm.toFixed(1)} ${ySplit}C${xm + 4} ${ySplit - 40} ${xm + 40} ${yEnd + 12} ${W} ${yEnd}`, true));
+const PUCK_SCALE = 0.853; // largura do chão na altura da bolinha (perspectiva 420 px, ~72 px à frente)
+const screenX = (geom, x) => { const sx = SCENE.W / 2 + (x - 320) * PUCK_SCALE; return geom.mirrored ? SCENE.W - sx : sx; };
+
+/**
+ * Estado de um quadro: `remaining` = metros até a manobra; `along` = metros percorridos na rota.
+ * Tudo deriva da distância, então a cena anda na velocidade real (e para quando você para).
+ */
+export function junctionFrame(geom, remaining, along) {
+  const r = Math.max(0, remaining);
+  const s = SCENE.PX_PER_M;
+  const mod = (a, m) => ((a % m) + m) % m;
+  const lane = smooth((260 - r) / 120); // muda de faixa entre 260 m e 140 m
+  const px = screenX(geom, geom.centers[geom.start] + (geom.centers[geom.target] - geom.centers[geom.start]) * lane);
+  const out = clamp01((40 - r) / 40);    // nos últimos 40 m a placa sai de cena
+  return {
+    approachY: SCENE.CAR_Y - r * s - SCENE.SPLIT_Y,
+    dashY: mod(along * s, SCENE.DASH),
+    loopY: mod(along * s, SCENE.LOOP),
+    ok: 0.18 * smooth((320 - r) / 100),
+    bad: 0.45 * smooth((220 - r) / 120),
+    puckX: px,
+    gantryScale: 0.75 + 0.3 * clamp01((320 - r) / 280) + 0.25 * out,
+    gantryOut: out,
+    turn: geom.ramp ? -20 * smooth((35 - r) / 35) || 0 : 0,
+    chip: r < 15 ? null : Math.round(r / 10) * 10,
+  };
+}
+
+const glyphOnGround = (name, x, y, color) =>
+  `<svg x="${(x - 17).toFixed(1)}" y="${y}" width="34" height="110" viewBox="0 0 48 48" preserveAspectRatio="none" class="lane-ico" style="color:${color}">${laneGlyph(name)}</svg>`;
+
+/** HTML da cena (estrutura fixa da manobra). */
+export function junctionScene(info, step) {
+  const geom = junctionGeometry(info);
+  const { N, w, x0, centers, lanes, g, ramp } = geom;
+  const gx0 = x0 + g * w, gx1 = x0 + N * w;
+  const Y = SCENE.SPLIT_Y;
+  const st = (x) => `style="${x}"`;
+  // chão fixo: faixas que seguem (ou todas, sem alça)
+  const fixed = [];
+  fixed.push(`<div class="jv-fill" style="left:${x0}px;width:${gx0 - x0}px;background:${V('j-asphalt')}"></div>`);
+  lanes.forEach((l, i) => {
+    if (i >= g) return;
+    fixed.push(`<div class="jv-fill ${l.valid ? 'jv-ok' : 'jv-bad'}" style="left:${x0 + i * w}px;width:${w}px;background:${l.valid ? V('route') : '#000'}"></div>`);
+  });
+  fixed.push(`<div class="jv-fill" style="left:${x0 - 4}px;width:4px;background:${V('j-mark')}"></div>`);
+  if (!ramp) fixed.push(`<div class="jv-fill" style="left:${gx1}px;width:4px;background:${V('j-mark')}"></div>`);
+  for (let i = 1; i < g; i++) fixed.push(`<div class="jv-dash" style="left:${x0 + i * w - 2}px"></div>`);
+  // setas das faixas que seguem: camada em laço
+  const loop = [];
+  for (let k = 0; k < 6; k++) lanes.forEach((l, i) => { if (i < g) loop.push(glyphOnGround(l.glyph, centers[i], k * SCENE.LOOP + 180, l.valid ? V('j-mark') : V('j-mark-dim'))); });
+  // camada que se aproxima: grupo da alça, alça e fita da rota
+  const ap = [];
+  if (ramp) {
+    const gc = (gx0 + gx1) / 2, rw = gx1 - gx0;
+    const curve = `M${gc} ${Y + 40}C${gc} ${Y - 60} ${gc + 36} ${Y - 170} ${gc + 240} ${Y - 260}`;
+    ap.push(`<rect x="${gx0}" y="${Y}" width="${rw}" height="3400" ${st(`fill:${V('j-asphalt')}`)}/>`);
+    ap.push(`<rect class="jv-ok" x="${gx0}" y="${Y}" width="${rw}" height="3400" ${st(`fill:${V('route')}`)}/>`);
+    ap.push(`<path d="${curve}" ${st(`fill:none;stroke:${V('j-mark')};stroke-width:${rw + 8}`)}/>`);
+    ap.push(`<path d="${curve}" ${st(`fill:none;stroke:${V('j-asphalt')};stroke-width:${rw}`)}/>`);
+    ap.push(`<path class="jv-ok" d="${curve}" ${st(`fill:none;stroke:${V('route')};stroke-width:${rw}`)}/>`);
+    for (let i = g; i < N; i++) {
+      const x = x0 + i * w;
+      ap.push(`<line x1="${x}" y1="${Y}" x2="${x}" y2="3800" ${st(`stroke:${V('j-mark')};stroke-width:4;stroke-dasharray:48 48`)}/>`);
+      for (let k = 0; k < 5; k++) ap.push(glyphOnGround(lanes[i].glyph, centers[i], Y + 300 + k * SCENE.LOOP, V('j-mark')));
+    }
+    ap.push(`<line x1="${gx1}" y1="${Y + 30}" x2="${gx1}" y2="3800" ${st(`stroke:${V('j-mark')};stroke-width:4`)}/>`);
+    ap.push(`<line x1="${gx0}" y1="-3000" x2="${gx0}" y2="${Y}" ${st(`stroke:${V('j-mark')};stroke-width:4`)}/>`);
+    const route = `M${gc} 3800L${gc} ${Y + 40}C${gc} ${Y - 60} ${gc + 36} ${Y - 170} ${gc + 220} ${Y - 250}`;
+    ap.push(`<path d="${route}" ${st(`fill:none;stroke:${V('j-case')};stroke-width:30;stroke-linecap:round`)}/>`);
+    ap.push(`<path d="${route}" ${st(`fill:none;stroke:${V('route')};stroke-width:20;stroke-linecap:round`)}/>`);
+  } else {
+    const v = lanes.map((l, i) => (l.valid ? i : -1)).filter((i) => i >= 0);
+    const gc = v.length ? (centers[v[0]] + centers[v[v.length - 1]]) / 2 : 320;
+    fixed.push(`<div class="jv-fill" style="left:${gc - 15}px;width:30px;background:${V('j-case')}"></div>`);
+    fixed.push(`<div class="jv-fill" style="left:${gc - 10}px;width:20px;background:${V('route')}"></div>`);
   }
-  // setas no chão
-  lanes.forEach((l, i) => {
-    const cb = (xs[i] + xs[i + 1]) / 2;
-    const g = mirrored ? MIRROR[l.glyph] : l.glyph;
-    [[H - 50, 38], [H - 88, 27]].forEach(([y, sz]) => o.push(groundArrow(g, lx(cb, y), y, sz * Math.min(1, 4 / N + 0.2), l.valid)));
-  });
-  // fita do caminho certo
-  const gb = (xs[k] + xs[N]) / 2;
-  const gm = lx(gb, ySplit);
-  const ge = (yIn + yOut) / 2 + 2;
-  const guide = `M${gb} ${H + 10}L${gm.toFixed(1)} ${ySplit}C${gm + 4} ${ySplit - 40} ${gm + 40} ${ge + 12} ${W - 24} ${ge}`;
-  o.push(`<path d="${guide}" ${st(`fill:none;stroke:${V('j-case')};stroke-width:15;stroke-linecap:round;opacity:.9`)}/>`);
-  o.push(`<path d="${guide}" ${st(`fill:none;stroke:${V('route')};stroke-width:9;stroke-linecap:round`)}/>`);
-  o.push(`<path d="M${W - 30} ${ge - 12}L${W - 8} ${ge}L${W - 30} ${ge + 12}Z" ${st(`fill:${V('route')};stroke:${V('j-case')};stroke-width:2.5;stroke-linejoin:round`)}/>`);
-  return o.join('');
-}
-
-function drawStraight(lanes) {
-  const N = lanes.length;
-  const xs = Array.from({ length: N + 1 }, (_, i) => 10 + (i * (W - 20)) / N);
-  const yTop = 58;
-  const vx = W / 2;
-  const lx = (xb, y) => xb + (vx - xb) * ((H - y) / (H + 220));
-  const o = [];
-  const st = (s) => `style="${s}"`;
-  o.push(`<path d="M${xs[0]} ${H}L${lx(xs[0], yTop).toFixed(1)} ${yTop}L${lx(xs[N], yTop).toFixed(1)} ${yTop}L${xs[N]} ${H}Z" ${st(`fill:${V('j-asphalt')}`)}/>`);
-  lanes.forEach((l, i) => {
-    if (!l.valid) return;
-    o.push(`<path d="M${xs[i]} ${H}L${lx(xs[i], yTop).toFixed(1)} ${yTop}L${lx(xs[i + 1], yTop).toFixed(1)} ${yTop}L${xs[i + 1]} ${H}Z" ${st(`fill:${V('j-fill')}`)}/>`);
-  });
-  for (let i = 0; i <= N; i++) {
-    const edge = i === 0 || i === N;
-    o.push(`<path d="M${xs[i]} ${H}L${lx(xs[i], yTop).toFixed(1)} ${yTop}" ${st(`fill:none;stroke:${V('j-mark')};stroke-width:3${edge ? '' : ';stroke-dasharray:16 14'}`)}/>`);
-  }
-  lanes.forEach((l, i) => {
-    const cb = (xs[i] + xs[i + 1]) / 2;
-    [[H - 50, 38], [H - 100, 27]].forEach(([y, sz]) => o.push(groundArrow(l.glyph, lx(cb, y), y, sz * Math.min(1, 4 / N + 0.2), l.valid)));
-  });
-  const v = lanes.map((l, i) => (l.valid ? i : -1)).filter((i) => i >= 0);
-  const gb = (xs[v[0]] + xs[v[v.length - 1] + 1]) / 2;
-  const guide = `M${gb} ${H + 10}L${lx(gb, yTop + 14).toFixed(1)} ${yTop + 14}`;
-  o.push(`<path d="${guide}" ${st(`fill:none;stroke:${V('j-case')};stroke-width:15;stroke-linecap:round;opacity:.9`)}/>`);
-  o.push(`<path d="${guide}" ${st(`fill:none;stroke:${V('route')};stroke-width:9;stroke-linecap:round`)}/>`);
-  return o.join('');
-}
-
-function gantry(branch, l1, l2) {
-  const st = (s) => `style="${s}"`;
-  const w = 178;
-  const x = branch === 'right' ? W - w - 14 : branch === 'left' ? 14 : (W - w) / 2;
-  const arrow = branch === 'right' ? 'slight-right' : branch === 'left' ? 'slight-left' : 'straight';
-  return `<path d="M6 54H${W - 6}" ${st('stroke:#7A8592;stroke-width:4')}/>`
-    + `<rect x="${x}" y="6" width="${w}" height="46" rx="5" ${st(`fill:#00703C;stroke:${V('route')};stroke-width:3`)}/>`
-    + `<rect x="${x + 3}" y="9" width="${w - 6}" height="40" rx="3" ${st('fill:none;stroke:#fff;stroke-width:1.5')}/>`
-    + `<g transform="translate(${x + 8} 16) scale(1.05)" ${st('fill:none;stroke:#fff;stroke-width:2.8;stroke-linecap:square;stroke-linejoin:miter')}><path d="${ARROW[arrow]}"/></g>`
-    + `<text x="${x + 40}" y="28" textLength="${Math.min(w - 50, l1.length * 9)}" lengthAdjust="spacingAndGlyphs" ${st("fill:#fff;font:800 16px 'Barlow Condensed','Arial Narrow',sans-serif")}>${esc(l1)}</text>`
-    + `<text x="${x + 40}" y="43" textLength="${Math.min(w - 50, l2.length * 6.2)}" lengthAdjust="spacingAndGlyphs" ${st("fill:#CDE7D8;font:700 11px 'Barlow Condensed','Arial Narrow',sans-serif")}>${esc(l2)}</text>`;
-}
-
-/** SVG da visão da junção para a manobra. */
-export function junctionSVG(info, step) {
-  const st = (s) => `style="${s}"`;
-  let body;
-  if (info.branch === 'right') body = drawRight(info.lanes, info.k, false);
-  else if (info.branch === 'left') {
-    // espelho: inverte a ordem das faixas, desenha como saída à direita e espelha o desenho
-    const mirrored = info.lanes.slice().reverse();
-    body = `<g transform="translate(${W} 0) scale(-1 1)">${drawRight(mirrored, info.N - info.k, true)}</g>`;
-  } else body = drawStraight(info.lanes);
   const [l1, l2] = signTexts(step);
-  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(info.hint)}">`
-    + `<rect width="${W}" height="${H}" ${st(`fill:${V('j-ground')}`)}/>`
-    + body
-    + `<circle cx="${W / 2}" cy="${H - 14}" r="12" ${st(`fill:${V('puck')};stroke:${V('j-case')};stroke-width:3`)}/>`
-    + `<path transform="translate(${W / 2 - 8} ${H - 22}) scale(.66)" d="M12 2l8 19-8-4.5L4 21z" ${st(`fill:${V('puck-ink')}`)}/>`
-    + gantry(info.branch, l1, l2)
-    + '</svg>';
+  const side = info.branch === 'right' || info.branch === 'left' ? info.branch : 'center';
+  const arrow = info.branch === 'right' ? 'slight-right' : info.branch === 'left' ? 'slight-left' : 'straight';
+  return `<div class="jv" role="img" aria-label="${esc(info.hint)}">`
+    + `<div class="jv-cam${geom.mirrored ? ' mirror' : ''}"><div class="jv-ground">${fixed.join('')}`
+    + `<div class="jv-loop"><svg viewBox="0 0 640 3840" width="640" height="3840" aria-hidden="true">${loop.join('')}</svg></div>`
+    + `<div class="jv-approach"><svg viewBox="0 0 640 3000" width="640" height="3000" aria-hidden="true">${ap.join('')}</svg></div>`
+    + `</div></div><div class="jv-fog"></div>`
+    + `<div class="jv-puck"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 17-7-4-7 4z"/></svg></div>`
+    + `<div class="jv-gantry ${side}"><div class="jv-gantry-in"><svg class="lane-ico" viewBox="0 0 48 48" aria-hidden="true">${laneGlyph(arrow)}</svg>`
+    + `<span><b>${esc(l1)}</b><small>${esc(l2)}</small></span></div></div>`
+    + `<div class="jv-chip ${side === 'left' ? 'right' : 'left'}"></div>`
+    + '</div>';
+}
+
+/** Aplica um quadro na cena já montada (só transformações e opacidades: leve para 60 fps). */
+export function applyJunctionFrame(root, f) {
+  const q = (sel) => root.querySelector(sel);
+  q('.jv-approach').style.transform = `translateY(${f.approachY.toFixed(1)}px)`;
+  q('.jv-loop').style.transform = `translateY(${f.loopY.toFixed(1)}px)`;
+  root.querySelectorAll('.jv-dash').forEach((d) => { d.style.backgroundPositionY = `${f.dashY.toFixed(1)}px`; });
+  root.querySelectorAll('.jv-ok').forEach((e) => { e.style.opacity = f.ok.toFixed(3); });
+  root.querySelectorAll('.jv-bad').forEach((e) => { e.style.opacity = f.bad.toFixed(3); });
+  q('.jv-ground').style.transform = `rotateX(90deg) rotateZ(${f.turn.toFixed(2)}deg)`;
+  q('.jv-puck').style.transform = `translateX(${(f.puckX - 15).toFixed(1)}px)`;
+  const gEl = q('.jv-gantry');
+  const dir = gEl.classList.contains('left') ? -1 : gEl.classList.contains('right') ? 1 : 0;
+  gEl.style.transform = `translate(${(dir * 70 * f.gantryOut).toFixed(1)}px, ${(-70 * f.gantryOut).toFixed(1)}px) scale(${f.gantryScale.toFixed(3)})`;
+  gEl.style.opacity = (1 - f.gantryOut).toFixed(3);
+  const chip = q('.jv-chip');
+  const text = f.chip == null ? '' : `${f.chip} m`;
+  if (chip.textContent !== text) chip.textContent = text;
+  chip.hidden = f.chip == null;
 }

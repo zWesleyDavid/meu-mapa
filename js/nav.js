@@ -8,7 +8,7 @@ import { getRoutes, signLabel } from './routing.js';
 import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
 import { pauseLocationEvents } from './location.js';
-import { analyzeLanes, isComplex, laneIcon, junctionSVG } from './junction.js';
+import { analyzeLanes, isComplex, laneIcon, junctionScene, junctionGeometry, junctionFrame, applyJunctionFrame } from './junction.js';
 import { maneuverIcon } from './maneuvers.js';
 import { signName, getSetting, setSetting } from './settings.js';
 
@@ -58,6 +58,7 @@ export function stopNav(callEnd = true) {
   nav.unsub.forEach((u) => u());
   clearTimeout(collapseTimer);
   stopSimulation();
+  junctionStop();
   nav.wakeLock?.release?.().catch(() => {});
   try { speechSynthesis.cancel(); } catch { /* sem voz */ }
   nav = null;
@@ -326,17 +327,21 @@ function render(progress, speed) {
     voice(step, d, speed, lanes);
   }
 
-  // Visão 2D da junção (perto de pontos confusos)
+  // Visão da junção em movimento (perto de pontos confusos)
   ui.sign.classList.toggle('compact', showJunction);
   if (showJunction) {
+    ui.junction.hidden = false;
     if (ui.junction.dataset.key !== `${step.at}`) {
       ui.junction.dataset.key = `${step.at}`;
-      ui.junction.innerHTML = `${junctionSVG(lanes, step)}<div class="j-foot"><span>${lanes.hint}</span><span class="j-mini">${
+      ui.junction.innerHTML = `<div class="jv-box">${junctionScene(lanes, step)}</div><div class="j-foot"><span>${lanes.hint}</span><span class="j-mini">${
         lanes.lanes.map((l) => `<i class="${l.valid ? 'on' : ''}">${laneIcon(l.glyph)}</i>`).join('')}</span></div>`;
+      junctionStart(lanes, step, progress, speed);
       if (!nav.junctionSpoken?.has(step.at)) { (nav.junctionSpoken ||= new Set()).add(step.at); say(lanes.hint, `${step.at}:lanes`); }
-    }
-    ui.junction.hidden = false;
-  } else ui.junction.hidden = true;
+    } else junctionTarget(progress, speed);
+  } else if (!ui.junction.hidden) {
+    ui.junction.hidden = true;
+    junctionPause();
+  }
 
   // Barra de faixas (antes, a até ~800 m)
   if (showLanes) {
@@ -369,6 +374,55 @@ function render(progress, speed) {
   ui.etaMini.textContent = `chega ${fmtArrival(remainingTime)}`;
   ui.speedVal.textContent = speed != null && speed >= 0 ? Math.round(speed * 3.6) : '–';
 }
+
+// ---------------- Visão da junção em movimento ----------------
+// A cena anda pela distância percorrida. Entre uma leitura do GPS e outra (~1 s), ela segue na
+// velocidade atual e corrige aos poucos o desvio quando a próxima leitura chega.
+const reduceMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+const jv = { el: null, geom: null, at: 0, target: 0, shown: 0, speed: 0, raf: 0, last: 0 };
+
+function junctionStart(info, step, progress, speed) {
+  junctionPause();
+  jv.el = ui.junction.querySelector('.jv');
+  jv.geom = junctionGeometry(info);
+  jv.at = step.at;
+  jv.shown = jv.target = progress;
+  jv.speed = Math.max(0, speed || 0);
+  junctionDraw();
+  junctionResume();
+}
+
+function junctionTarget(progress, speed) {
+  jv.target = progress;
+  jv.speed = Math.max(0, speed || 0);
+  if (reduceMotion()) { jv.shown = progress; junctionDraw(); } else junctionResume();
+}
+
+function junctionDraw() {
+  if (!jv.el) return;
+  // ocupa a largura do painel; deitado, limita a altura (como antes) e centraliza
+  const w = ui.junction.clientWidth || 366;
+  const maxH = landscapePhone() ? Math.max(120, window.innerHeight - 240) : Infinity;
+  const k = Math.min(w / 366, maxH / 250);
+  ui.junction.style.setProperty('--jv-k', k.toFixed(4));
+  ui.junction.style.setProperty('--jv-x', `${((w - 366 * k) / 2).toFixed(1)}px`);
+  applyJunctionFrame(jv.el, junctionFrame(jv.geom, jv.at - jv.shown, jv.shown));
+}
+
+function junctionTick(t) {
+  jv.raf = 0;
+  if (!jv.el || ui.junction.hidden) return;
+  const dt = jv.last ? Math.min(0.1, (t - jv.last) / 1000) : 0;
+  jv.last = t;
+  jv.shown += jv.speed * dt;
+  jv.shown += (jv.target - jv.shown) * Math.min(1, dt * 2.5);
+  junctionDraw();
+  jv.raf = requestAnimationFrame(junctionTick);
+}
+
+function junctionResume() { if (!jv.raf && jv.el && !reduceMotion()) { jv.last = 0; jv.raf = requestAnimationFrame(junctionTick); } }
+function junctionPause() { if (jv.raf) cancelAnimationFrame(jv.raf); jv.raf = 0; }
+function junctionStop() { junctionPause(); jv.el = null; jv.geom = null; }
 
 async function reroute(pos) {
   const session = nav; // a navegação pode terminar (ou recomeçar) enquanto a rota é calculada

@@ -43,7 +43,7 @@ Os testes nunca acessam a internet: o `fetch` é trocado por respostas simuladas
 | `tests/routing.test.js` | instruções em português, paradas, cache e mensagens de erro do OSRM |
 | `tests/places.test.js` | junção de resultados por categoria, servidores reserva do Overpass, detalhes do lugar (inclusive links seguros) |
 | `tests/map3d.test.js` | modo 3D: o que ligar (inclusive bateria fraca), parede da rota, prédio do destino e desenho das setas 3D |
-| `tests/junction.test.js` | faixas e visão da junção (inclusive nomes com HTML escapados) |
+| `tests/junction.test.js` | faixas, setas de faixa e visão da junção em movimento: geometria, movimento pela distância (inclusive nomes com HTML escapados) |
 | `tests/hours.test.js` | horário de funcionamento: aberto/fechado, madrugada, formatos não entendidos |
 | `tests/settings.test.js` | preferências e abreviações (R., Av., Dr.…) |
 | `tests/format.test.js`, `tests/geo.test.js` | distâncias, tempos e geometria da navegação |
@@ -67,7 +67,7 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
 - **Partida, chegada e até 3 paradas**: toque em DE/PARA ou em "+ Adicionar parada" e busque ou toque no mapa; também pelo toque longo ("Adicionar como parada"); inverter inverte a viagem toda
 - **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
   trecho já percorrido em cinza, **zoom dinâmico** (afasta na rodovia, aproxima perto das manobras),
-  **faixas** (barra a até ~800 m e **visão 2D da junção** em pontos confusos, a partir dos dados de faixa do OSM), tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
+  **faixas** (barra a até ~800 m e **visão da junção em movimento** em pontos confusos, a partir dos dados de faixa do OSM: as faixas andam na sua velocidade real, a faixa certa acende, as outras apagam e a vista acompanha a curva), tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
   Se a partida não for sua localização, o Iniciar já abre em modo simulação.
@@ -100,7 +100,7 @@ js/geocoder.js        busca/geocodificação reversa (Photon) → formato Place
 js/routing.js         rotas (OSRM) + gerador de instruções em pt-BR
 js/sheet.js           bottom sheet arrastável
 js/nav.js             modo navegação (GPS/simulação, manobras, voz, recálculo, zoom dinâmico)
-js/junction.js        faixas: análise, barra e visão 2D da junção
+js/junction.js        faixas: análise, setas de faixa e visão da junção em movimento (CSS 3D)
 js/geo.js             geometria: distâncias, projeção na rota
 js/location.js        GPS do usuário
 js/places.js          categorias próximas (blocos do mapa + Overpass com servidores reserva)
