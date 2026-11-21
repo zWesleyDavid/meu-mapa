@@ -97,6 +97,9 @@ export const CONFIG = {
     offRouteFixes: 3,        // leituras seguidas fora da rota antes de recalcular
     arriveMeters: 25,
     pitch: 55,
+    // zoom da câmera conforme a velocidade: [km/h, zoom]; entre os pontos o zoom é interpolado
+    // (sem degraus, para não ficar alternando quando a velocidade oscila perto de um limite)
+    zoomBySpeed: [[35, 16.9], [60, 16.2], [80, 16.0], [100, 15.6], [120, 15.2]],
   },
 
   recentLimit: 8,

@@ -118,3 +118,14 @@ export function simSpeed(prep, along, prev, cfg, dt = 1) {
   // aceleração e frenagem suaves (≈ 2 m/s² para ganhar, 3 m/s² para perder)
   return Math.max(Math.min(target, p + 2 * dt), p - 3 * dt, 0.5);
 }
+
+/** Valor interpolado numa tabela [[x, y], …] em ordem de x (fora dela, o valor da ponta). */
+export function interpolate(table, x) {
+  if (!table?.length) return null;
+  if (x <= table[0][0]) return table[0][1];
+  for (let i = 1; i < table.length; i++) {
+    const [x1, y1] = table[i];
+    if (x <= x1) { const [x0, y0] = table[i - 1]; return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0); }
+  }
+  return table[table.length - 1][1];
+}

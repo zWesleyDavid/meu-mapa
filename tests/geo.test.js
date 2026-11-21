@@ -108,3 +108,22 @@ test('simSpeed: respeita mínimo e máximo do perfil e usa a reserva sem tempo p
   const foot = CONFIG.routing.profiles.foot;
   assert.ok(simSpeed(fast, 0, 1.8, foot) <= foot.sim.max);
 });
+
+import { interpolate } from '../js/geo.js';
+
+test('interpolate: pontas e meio-termo', () => {
+  const t = CONFIG.nav.zoomBySpeed;
+  assert.equal(interpolate(t, 0), 16.9, 'parado = zoom de perto');
+  assert.equal(interpolate(t, 35), 16.9);
+  assert.equal(interpolate(t, 60), 16.2);
+  near(interpolate(t, 70), 16.1, 1e-9, 'entre 60 e 80');
+  assert.equal(interpolate(t, 80), 16.0);
+  assert.equal(interpolate(t, 100), 15.6);
+  assert.equal(interpolate(t, 200), 15.2, 'acima de 120 fica no último');
+  assert.equal(interpolate([], 10), null);
+});
+
+test('zoom por velocidade: nunca aproxima quando acelera', () => {
+  let prev = Infinity;
+  for (let k = 0; k <= 150; k += 5) { const z = interpolate(CONFIG.nav.zoomBySpeed, k); assert.ok(z <= prev + 1e-12); prev = z; }
+});

@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { $, bus, state, store, el, toast } from './core.js';
 import { icon } from './icons.js';
 import * as M from './map.js';
-import { prepareRoute, snap, pointAt, distance, simSpeed } from './geo.js';
+import { prepareRoute, snap, pointAt, distance, simSpeed, interpolate } from './geo.js';
 import { getRoutes, signLabel } from './routing.js';
 import { fmtDistance, fmtDuration, fmtArrival } from './format.js';
 import { stepsList } from './views.js';
@@ -273,7 +273,7 @@ function onPosition(pos) {
 // A mudança por leitura é limitada, para a câmera "respirar" em vez de pular.
 function targetCamera(speed, d, junction) {
   const kmh = (speed || 0) * 3.6;
-  let zoom = kmh > 90 ? 15 : kmh > 60 ? 15.5 : kmh > 35 ? 16.2 : 16.9;
+  let zoom = interpolate(CONFIG.nav.zoomBySpeed, kmh);
   let pitch = kmh > 60 ? 45 : 50;
   if (d != null && d < 700) {
     const f = Math.max(0, Math.min(1, (700 - d) / 500)); // 0 a 700 m → 1 a 200 m
