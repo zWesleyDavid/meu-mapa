@@ -32,8 +32,28 @@ function glyphFor(ind = []) {
   return 'straight';
 }
 
+// Setas de faixa no desenho novo (o mesmo das setas de manobra): haste grossa + ponta sólida,
+// numa grade de 48. `sh` = haste (traço), `hd` = ponta (preenchida). As da esquerda são espelhos.
+const LANE_RIGHT = {
+  straight: ['M24 47V17', 'M24 2 37 19H11z'],
+  right: ['M15 47V27a11 11 0 0 1 11-11h5', 'M29 3 46 16 29 29z'],
+  'slight-right': ['M17 47V31L28 20', 'M39 9 35.5 26.7 21.3 12.5z'],
+  'straight-right': ['M17 47V17M17 39c0-8 4-12 12-12h3', 'M17 2 29 18H5zM31 18 44 27 31 36z'],
+  uturn: ['M32 47V22a8 8 0 0 0-16 0v6', 'M7 27H25L16 42z'],
+};
+const MIRRORED = { left: 'right', 'slight-left': 'slight-right', 'straight-left': 'straight-right' };
+export const LANE_GLYPHS = [...Object.keys(LANE_RIGHT), ...Object.keys(MIRRORED)];
+
+/** Desenho (sem a tag svg) de uma seta de faixa, para usar dentro de outro SVG. */
+export function laneGlyph(name) {
+  const base = MIRRORED[name] || (LANE_RIGHT[name] ? name : 'straight');
+  const [sh, hd] = LANE_RIGHT[base];
+  const body = `<path class="sh" d="${sh}"/><path class="hd" d="${hd}"/>`;
+  return MIRRORED[name] ? `<g transform="matrix(-1 0 0 1 48 0)">${body}</g>` : body;
+}
+
 export function laneIcon(name) {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ARROW[name] || ARROW.straight}"/></svg>`;
+  return `<svg class="lane-ico" viewBox="0 0 48 48" aria-hidden="true">${laneGlyph(name)}</svg>`;
 }
 
 /** → { lanes, valid, hint, branch, k } ou null quando não há escolha de faixa a fazer. */

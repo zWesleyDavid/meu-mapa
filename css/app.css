@@ -426,18 +426,20 @@ svg { flex: none; }
 .lane-cells { display: flex; border-radius: 8px; overflow: hidden; flex: none; }
 .lane-cell { width: 42px; height: 40px; display: grid; place-items: center; }
 .lane-cell + .lane-cell { border-left: 2px dashed var(--lane-off); }
-.lane-cell svg { width: 26px; height: 26px; fill: none; stroke: var(--lane-off); stroke-width: 2.8; stroke-linecap: square; stroke-linejoin: miter; }
+.lane-cell svg { width: 26px; height: 26px; color: var(--lane-off); }
+.lane-ico .sh { fill: none; stroke: currentColor; stroke-width: 7; }
+.lane-ico .hd { fill: currentColor; }
 .lane-cell.on { background: color-mix(in srgb, var(--strip-text) 16%, transparent); }
-.lane-cell.on svg { stroke: var(--strip-text); }
+.lane-cell.on svg { color: var(--strip-text); }
 .lane-label { font: 700 16px var(--signf); letter-spacing: .04em; text-transform: uppercase; color: var(--strip-label); text-align: right; line-height: 1.1; }
 .nav-junction { background: var(--j-bg); }
 .nav-junction > svg { display: block; width: 100%; height: auto; }
 .j-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; background: var(--strip-bg); color: var(--strip-text); font: 700 17px var(--signf); letter-spacing: .03em; text-transform: uppercase; }
 .j-mini { display: flex; gap: 4px; flex: none; }
 .j-mini i { width: 22px; height: 22px; border-radius: 5px; display: grid; place-items: center; }
-.j-mini i svg { width: 16px; height: 16px; fill: none; stroke: var(--lane-off); stroke-width: 3; stroke-linecap: square; stroke-linejoin: miter; }
+.j-mini i svg { width: 16px; height: 16px; color: var(--lane-off); }
 .j-mini i.on { background: var(--accent); }
-.j-mini i.on svg { stroke: var(--accent-text); }
+.j-mini i.on svg { color: var(--accent-text); }
 .nav-side { position: absolute; right: 16px; top: calc(var(--nav-top-h, 180px) + 28px + var(--safe-top)); display: flex; flex-direction: column; gap: 10px; }
 .nav-recenter { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--nav-bottom-h, 76px) + 26px + var(--safe-bottom)); height: 46px; padding: 0 18px; border-radius: 23px; border: var(--card-border); background: var(--surface); color: var(--text); box-shadow: var(--shadow); font: 700 15px var(--font); display: flex; align-items: center; gap: 8px; }
 .nav-recenter svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }

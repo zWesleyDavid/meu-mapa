@@ -54,3 +54,21 @@ test('junctionSVG: nomes vindos do mapa são escapados (sem HTML injetado)', () 
 test('laneIcon: desenho desconhecido usa "em frente"', () => {
   assert.equal(laneIcon('nao-existe'), laneIcon('straight'));
 });
+
+import { laneGlyph, LANE_GLYPHS } from '../js/junction.js';
+
+test('setas de faixa: todas no desenho novo (haste + ponta sólida)', () => {
+  for (const g of LANE_GLYPHS) {
+    const svg = laneIcon(g);
+    assert.match(svg, /viewBox="0 0 48 48"/, g);
+    assert.match(svg, /class="sh"/, g);
+    assert.match(svg, /class="hd"/, g);
+  }
+});
+
+test('setas de faixa: as da esquerda são o espelho das da direita', () => {
+  assert.ok(laneGlyph('left').includes('matrix(-1 0 0 1 48 0)'));
+  assert.ok(laneGlyph('left').includes(laneGlyph('right')));
+  assert.ok(!laneGlyph('right').includes('matrix'));
+  assert.equal(laneGlyph('desconhecida'), laneGlyph('straight'));
+});
