@@ -111,6 +111,38 @@ export function pickBuilding(features, lngLat, maxM = 15) {
   return { geometry: { type: 'Polygon', coordinates: near.rings }, height: Math.max(height, base + 3), base };
 }
 
+/**
+ * Afasta o contorno externo `meters` para fora (cantos em esquadria, limitada a 2×).
+ * Usado no prédio em destaque: se as paredes ficarem exatamente sobre as do prédio do mapa,
+ * a placa de vídeo alterna entre as duas e aparecem listras ("z-fighting").
+ */
+export function inflatePolygon(geometry, meters) {
+  if (geometry?.type !== 'Polygon' || !geometry.coordinates?.[0]?.length) return geometry;
+  const [outer, ...holes] = geometry.coordinates;
+  const ring = outer[0][0] === outer.at(-1)[0] && outer[0][1] === outer.at(-1)[1] ? outer.slice(0, -1) : outer.slice();
+  if (ring.length < 3) return geometry;
+  const lat0 = ring[0][1];
+  const kx = mPerDegLng(lat0);
+  const P = ring.map(([x, y]) => [(x - ring[0][0]) * kx, (y - lat0) * mPerDegLat]);
+  // orientação do anel (área com sinal): define qual lado é "fora"
+  let area = 0;
+  for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; area += a[0] * b[1] - b[0] * a[1]; }
+  const out = area > 0 ? 1 : -1; // anti-horário: a normal de fora fica à direita do sentido da borda
+  const normal = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1]; const L = Math.hypot(dx, dy) || 1; return [(dy / L) * out, (-dx / L) * out]; };
+  const moved = P.map((p, i) => {
+    const prev = P[(i - 1 + P.length) % P.length], next = P[(i + 1) % P.length];
+    const n1 = normal(prev, p), n2 = normal(p, next);
+    let bx = n1[0] + n2[0], by = n1[1] + n2[1];
+    const bl = Math.hypot(bx, by);
+    if (bl < 1e-9) { bx = n1[0]; by = n1[1]; } else { bx /= bl; by /= bl; }
+    const cos = bx * n1[0] + by * n1[1];
+    const d = meters / Math.max(cos, 0.5);
+    return [p[0] + bx * d, p[1] + by * d];
+  }).map(([x, y]) => [ring[0][0] + x / kx, lat0 + y / mPerDegLat]);
+  moved.push(moved[0]);
+  return { type: 'Polygon', coordinates: [moved, ...holes] };
+}
+
 // ---------------- Setas 3D ----------------
 
 // Seta "estilo Waze": ponta, asas e entalhe atrás. Os cantos são só levemente arredondados.

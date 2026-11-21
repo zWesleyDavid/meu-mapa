@@ -1,6 +1,6 @@
 // Service worker: guarda o "casco" do app para abrir rápido e funcionar como app instalado.
 // Tiles, busca e rotas sempre vão para a rede (não são cacheados aqui).
-const VERSION = 'v20';
+const VERSION = 'v21';
 const SHELL = [
   './', 'index.html', 'css/app.css', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/apple-touch-icon.png',
   'js/main.js', 'js/config.js', 'js/core.js', 'js/format.js', 'js/icons.js', 'js/geocoder.js',

@@ -142,3 +142,37 @@ test('puckSVG waze: ponta para cima com rumo 0, para baixo com 180', () => {
   assert.ok(tipY(puckSVG('waze', 0, 0)) < 0);
   assert.ok(tipY(puckSVG('waze', 180, 0)) > 0);
 });
+
+import { inflatePolygon } from '../js/map3d.js';
+
+test('inflatePolygon: quadrado cresce ~0,6 m de cada lado, nos dois sentidos de anel', () => {
+  const sq = square(-48.5, -27.6, 0.0001); // ~22 m × ~20 m
+  for (const ring of [sq, sq.slice().reverse()]) {
+    const g = inflatePolygon({ type: 'Polygon', coordinates: [ring] }, 0.6);
+    const r = g.coordinates[0];
+    assert.equal(r.length, 5);
+    assert.deepEqual(r[0], r[4], 'continua fechado');
+    const w0 = distance(ring[0], ring[1]);
+    const w1 = distance(r[0], r[1]);
+    assert.ok(Math.abs(w1 - w0 - 1.2) < 0.05, `largura cresceu ${w1 - w0}`);
+    assert.ok(pointInRing([-48.5, -27.6], r), 'o centro continua dentro');
+    // o canto saiu para fora (mais longe do centro)
+    assert.ok(distance([-48.5, -27.6], r[0]) > distance([-48.5, -27.6], ring[0]));
+  }
+});
+
+test('inflatePolygon: prédio em L (canto côncavo) não se cruza e mantém os pátios', () => {
+  const L = [[0, 0], [0.0002, 0], [0.0002, 0.0001], [0.0001, 0.0001], [0.0001, 0.0002], [0, 0.0002], [0, 0]].map(([x, y]) => [-48.5 + x, -27.6 + y]);
+  const hole = square(-48.49995, -27.59995, 0.00001);
+  const g = inflatePolygon({ type: 'Polygon', coordinates: [L, hole] }, 0.6);
+  assert.equal(g.coordinates.length, 2);
+  assert.deepEqual(g.coordinates[1], hole);
+  const inner = g.coordinates[0][3]; // canto côncavo
+  assert.ok(Math.abs(distance(inner, L[3]) - 0.6 * Math.SQRT2) < 0.05, 'o canto de dentro também anda ~0,6 m (na diagonal)');
+});
+
+test('inflatePolygon: entradas que não são polígono passam direto', () => {
+  assert.equal(inflatePolygon(null, 1), null);
+  const mp = { type: 'MultiPolygon', coordinates: [] };
+  assert.equal(inflatePolygon(mp, 1), mp);
+});

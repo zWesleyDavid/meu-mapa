@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { bus } from './core.js';
 import { buildStyle, placeholderStyle } from './mapstyle.js';
 import { provideIcon } from './mapicons.js';
-import { corridor, pickBuilding, puckSVG } from './map3d.js';
+import { corridor, pickBuilding, puckSVG, inflatePolygon } from './map3d.js';
 
 /* global maplibregl */
 export let map;
@@ -346,7 +346,8 @@ function tryPickDest() {
   const feats = map.queryRenderedFeatures([[p.x - 40, p.y - 40], [p.x + 40, p.y + 40]], { layers });
   const b = pickBuilding(feats, [t.lng, t.lat]);
   if (b) {
-    map.getSource('mm-dest').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: b.geometry, properties: { h: b.height + 0.6, b: b.base } }] });
+    // um pouco maior que o prédio do mapa, para as paredes não coincidirem (evita listras piscando)
+    map.getSource('mm-dest').setData({ type: 'FeatureCollection', features: [{ type: 'Feature', geometry: inflatePolygon(b.geometry, 0.6), properties: { h: b.height + 0.6, b: b.base } }] });
     dest3d.pending = false;
   } else if (++dest3d.tries >= 4) dest3d.pending = false; // lugar sem prédio mapeado
 }
