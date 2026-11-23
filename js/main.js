@@ -502,7 +502,7 @@ bus.on('position', ({ position, first }) => {
 });
 
 bus.on('position:error', (e) => {
-  toast(e?.code === 1 ? 'Permissão de localização negada.' : 'Não consegui obter sua localização.');
+  toast(e?.code === 1 ? 'Localização bloqueada. Libere nas permissões do navegador para este site.' : 'Não consegui obter sua localização.', e?.code === 1 ? 4500 : undefined);
 });
 
 // Botões do mapa

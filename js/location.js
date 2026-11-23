@@ -9,9 +9,19 @@ export function startLocation() {
     if (!('geolocation' in navigator)) bus.emit('position:error', { code: 0 });
     return;
   }
-  watchId = navigator.geolocation.watchPosition(onPos, (e) => bus.emit('position:error', e), {
+  watchId = navigator.geolocation.watchPosition(onPos, onError, {
     enableHighAccuracy: true, maximumAge: 2000, timeout: 20000,
   });
+}
+
+function onError(e) {
+  // Permissão negada encerra o acompanhamento: libera para o botão "Minha localização"
+  // tentar de novo (antes ele só mostrava "Procurando sua localização…" para sempre).
+  if (e?.code === 1 && watchId != null) {
+    try { navigator.geolocation.clearWatch(watchId); } catch { /* ok */ }
+    watchId = null;
+  }
+  bus.emit('position:error', e);
 }
 
 function onPos(p) {
