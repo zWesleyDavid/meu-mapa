@@ -53,8 +53,9 @@ let controller;
 // Depois reordenamos (rankResults) e tiramos repetidos (dedupe):
 //  1) cidade, estado ou país com o nome exato (ex.: "Campinas"), mesmo longe;
 //  2) endereço com o número digitado (ex.: "Av Paulista 1000"), na ordem do Photon;
-//  3) o que tem o nome digitado — incluindo bairros e, se houver número no fim, a rua sem
-//     o número: primeiro o nome exatamente igual (até ~30 km), depois o resto, cada grupo
+//  2b) a rua digitada sem aquele número (o mapa nem sempre tem os números das casas),
+//     primeiro a do bairro/cidade digitados, depois a mais perto;
+//  3) o que tem o nome digitado — incluindo bairros: primeiro o nome exatamente igual (até ~30 km), depois o resto, cada grupo
 //     do mais perto para o mais longe; pontos de ônibus com o mesmo nome do lugar vão
 //     para o fim deste grupo (quem busca "Parque Ibirapuera" quer o parque);
 //  4) o resto, na ordem do Photon (buscas muito específicas etc.).
@@ -75,20 +76,73 @@ const isStreet = (p) => p.osmKey === 'highway' && p.type === 'street';
 const isTransitStop = (p) => (p.osmKey === 'highway' && p.osmValue === 'bus_stop')
   || p.osmKey === 'public_transport' || (p.osmKey === 'railway' && /platform|stop|halt/.test(p.osmValue || ''));
 
-// abreviações comuns de logradouro (para "Av Paulista 1000" bater com "Avenida Paulista, 1000")
-const ABBR = { av: 'avenida', r: 'rua', al: 'alameda', pc: 'praca', pca: 'praca', rod: 'rodovia', est: 'estrada', tv: 'travessa', trav: 'travessa', estr: 'estrada', lgo: 'largo', vd: 'viaduto' };
-const streetKey = (s) => tokens(s).filter((t) => !/^\d+[a-z]?$/.test(t)).map((t) => ABBR[t] || t).join(' ');
+// ---------------- Endereços no formato brasileiro ----------------
+// "R. Srg. Rui Alves, 192 - Vila Esperança, Maringá - PR, 87020-000": o Photon não entende
+// abreviações ("R.", "Srg.") nem o resto depois do número. parseAddress separa rua, número e
+// bairro/cidade e expande as abreviações (padrão dos Correios e das placas).
+const TYPE_ABBR = {
+  r: 'Rua', av: 'Avenida', avda: 'Avenida', al: 'Alameda', tv: 'Travessa', trav: 'Travessa', rod: 'Rodovia',
+  est: 'Estrada', estr: 'Estrada', pc: 'Praça', pca: 'Praça', pç: 'Praça', pça: 'Praça', lg: 'Largo', lgo: 'Largo',
+  vd: 'Viaduto', ld: 'Ladeira', serv: 'Servidão', bc: 'Beco', cam: 'Caminho', marg: 'Marginal',
+};
+// títulos: com ponto sempre; sem ponto só os que não confundem com palavras ("Pe", "D", "Fr" não)
+const TITLE_ABBR = {
+  dr: 'Doutor', dra: 'Doutora', prof: 'Professor', profa: 'Professora', dep: 'Deputado', sen: 'Senador',
+  gov: 'Governador', pres: 'Presidente', ver: 'Vereador', pref: 'Prefeito', cel: 'Coronel', gen: 'General',
+  cap: 'Capitão', ten: 'Tenente', sgt: 'Sargento', sgto: 'Sargento', srg: 'Sargento', sarg: 'Sargento',
+  mal: 'Marechal', alm: 'Almirante', brig: 'Brigadeiro', maj: 'Major', eng: 'Engenheiro', des: 'Desembargador',
+  min: 'Ministro', pe: 'Padre', mons: 'Monsenhor', fr: 'Frei', d: 'Dom', com: 'Comendador', visc: 'Visconde',
+  sta: 'Santa', sto: 'Santo', sr: 'Senhor', sra: 'Senhora', vl: 'Vila', jd: 'Jardim', jdm: 'Jardim',
+  pq: 'Parque', res: 'Residencial', cj: 'Conjunto', conj: 'Conjunto', cond: 'Condomínio',
+};
+const NO_DOT_OK = new Set(['dr', 'dra', 'prof', 'profa', 'cel', 'sgt', 'sgto', 'srg', 'ten', 'cap', 'mal', 'brig', 'eng', 'pres', 'dep', 'gov', 'jd', 'jdm', 'vl', 'pq', 'sta', 'sto']);
+const fold = (w) => w.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const UF = /^(ac|al|ap|am|ba|ce|df|es|go|ma|mt|ms|mg|pa|pb|pr|pe|pi|rj|rn|rs|ro|rr|sc|sp|se|to)$/i;
+const NUMBER = /^(?:n[º°o.]?\s*)?(\d+[a-z]?)$/i;
+const isRealStreet = (s) => tokens(s).some((t) => /^[a-z]{3,}$/.test(t)); // "BR 101", "SP 55" são rodovias
 
-/** Número da casa no fim da busca ("Rua Augusta 500", "Av. Paulista, 1000", "Rua X nº 12"). */
-const TRAILING_NUMBER = /[\s,]+(?:n[º°o.]?\s*)?(\d+[a-z]?)\s*$/i;
-export function splitHouseNumber(query) {
-  const q = String(query || '').trim();
-  const m = q.match(TRAILING_NUMBER);
-  if (!m) return { street: q, number: null };
-  const street = q.slice(0, m.index).trim();
-  // precisa de uma palavra de verdade antes do número ("BR 101", "SP 55" são rodovias, não endereço)
-  return tokens(street).some((t) => /^[a-z]{3,}$/.test(t)) ? { street, number: m[1].toLowerCase() } : { street: q, number: null };
+/** Expande abreviações; a do tipo de via só no começo de cada parte ("R. X" sim, "Bloco R" não). */
+function expand(text) {
+  return text.split(/(\s+)/).map((w, i, all) => {
+    if (/^\s+$/.test(w) || !w) return w;
+    const m = w.match(/^([^\s.,]+)(\.?)([,]?)$/);
+    if (!m) return w;
+    const key = fold(m[1]);
+    const prev = all.slice(0, i).join('').trimEnd();
+    const segStart = !prev || /[,]$/.test(prev) || /(^|\s)[-–—]$/.test(prev);
+    if (segStart && TYPE_ABBR[key] && (m[2] || key !== 'est')) return TYPE_ABBR[key] + m[3];
+    if (TITLE_ABBR[key] && (m[2] || NO_DOT_OK.has(key))) return TITLE_ABBR[key] + m[3];
+    return w;
+  }).join('');
 }
+
+/**
+ * { text, street, number, area } — text é o que vai para o Photon. Só mexe em buscas com cara
+ * de endereço (começa com tipo de via ou tem número da casa), para não estragar nomes como
+ * "Dr. Consulta".
+ */
+export function parseAddress(query) {
+  const raw = String(query || '').trim();
+  const clean = raw.replace(/\b\d{5}-?\d{3}\b/g, ' ').replace(/\s+/g, ' ').trim(); // sem CEP
+  const segs = clean.split(/\s+[-–—]\s+/);
+  const parts = segs[0].split(',').map((x) => x.trim()).filter(Boolean);
+  let street = parts[0] || '';
+  let number = null;
+  let area = [...parts.slice(1), ...segs.slice(1).flatMap((x) => x.split(','))];
+  const inline = street.match(/^(.*?)\s+(?:n[º°o.]?\s*)?(\d+[a-z]?)$/i);
+  if (inline && isRealStreet(inline[1])) { street = inline[1]; number = inline[2]; }
+  else if (parts[1] && NUMBER.test(parts[1]) && isRealStreet(street)) { number = parts[1].match(NUMBER)[1]; area = area.slice(1); }
+  area = area.map((x) => x.trim()).filter((x) => x && !UF.test(x));
+  const startsWithType = TYPE_ABBR[fold((street.split(/[\s.]/)[0] || ''))] || /^(rua|avenida|alameda|travessa|rodovia|estrada|praça|largo)\b/i.test(street);
+  if (!number && !startsWithType) return { text: raw, street: raw, number: null, area: '' };
+  street = expand(street);
+  const areaText = expand(area.join(', '));
+  const text = [number ? `${street} ${number}` : street, areaText].filter(Boolean).join(', ');
+  return { text, street, number: number ? number.toLowerCase() : null, area: areaText };
+}
+
+// chave de comparação de nome de rua: sem número, sem acento, abreviações por extenso
+const streetKey = (s) => tokens(expand(String(s || ''))).filter((t) => !/^\d+[a-z]?$/.test(t)).join(' ');
 
 /** O nome contém todas as palavras digitadas (a última pode estar pela metade). */
 export function nameMatches(name, qTokens) {
@@ -100,24 +154,30 @@ export function nameMatches(name, qTokens) {
 }
 
 export function rankResults(places, query, near) {
-  const q = tokens(query);
+  const { text, street, number, area } = parseAddress(query);
+  const q = tokens(text); // com as abreviações por extenso ("R. Srg." → "Rua Sargento")
   const qKey = q.join(' ');
-  const { street, number } = splitHouseNumber(query);
   const wanted = number ? streetKey(street) : null;
+  const areaTokens = tokens(area);
   const nearM = CONFIG.geocoder.nearKm * 1000;
   const list = places.map((p, i) => ({
     ...p, order: i,
     dist: near ? distance([near.lng, near.lat], [p.lng, p.lat]) : null,
   }));
-  const pinned = [], address = [], close = [], rest = [];
+  const pinned = [], address = [], streets = [], close = [], rest = [];
   for (const p of list) {
     const sameStreet = number && streetKey(p.name) === wanted;
     if (isBigArea(p) && tokens(p.name).join(' ') === qKey) pinned.push(p);
-    // o endereço exato (rua + número) perto de você; longe, entra no grupo seguinte pela distância
-    else if (sameStreet && (p.housenumber || '').toLowerCase() === number && (p.dist == null || p.dist <= nearM)) address.push(p);
-    else if (near && !isBigArea(p) && (nameMatches(p.name, q) || (sameStreet && (isStreet(p) || p.housenumber)))) close.push(p);
+    // o endereço exato (rua + número): perto de você, ou onde você disse (bairro/cidade digitados)
+    else if (sameStreet && (p.housenumber || '').toLowerCase() === number && (area || p.dist == null || p.dist <= nearM)) address.push(p);
+    // a rua certa sem aquele número no mapa (o Photon nem sempre tem os números das casas)
+    else if (sameStreet && (isStreet(p) || p.housenumber)) streets.push(p);
+    else if (near && !isBigArea(p) && nameMatches(p.name, q)) close.push(p);
     else rest.push(p);
   }
+  // rua: primeiro a do bairro/cidade digitados, depois a mais perto (sem localização: ordem do Photon)
+  const inArea = (p) => (areaTokens.length && nameMatches(`${p.address} ${p.city}`, areaTokens) ? 0 : 1);
+  streets.sort((a, b) => (inArea(a) - inArea(b)) || (near ? a.dist - b.dist : a.order - b.order));
   // nome exatamente igual e perto de você antes de quem só contém as palavras ("Parque
   // Ibirapuera" antes de "Lagoa Parque Ibirapuera"); o igual que está longe (bairro de mesmo
   // nome em outro estado) volta para a ordem por distância. Dentro de cada grupo, do mais perto
@@ -125,7 +185,7 @@ export function rankResults(places, query, near) {
   // (só com 2+ palavras: "farmácia" sozinha não deve pôr na frente um ponto sem nome chamado "Farmácia")
   const partial = (p) => (q.length > 1 && tokens(p.name).join(' ') === qKey && p.dist <= nearM ? 0 : 1);
   close.sort((a, b) => (isTransitStop(a) - isTransitStop(b)) || (partial(a) - partial(b)) || (a.dist - b.dist));
-  return [...pinned, ...address, ...close, ...rest].map(({ order, ...p }) => p);
+  return [...pinned, ...address, ...streets, ...close, ...rest].map(({ order, ...p }) => p);
 }
 
 /**
@@ -158,7 +218,8 @@ export async function search(query, near) {
   controller = new AbortController();
   const { signal } = controller;
   const g = CONFIG.geocoder;
-  const base = { q: query, limit: g.limit, lang: g.lang };
+  const addr = parseAddress(query);
+  const base = { q: addr.text, limit: g.limit, lang: g.lang };
   const global = new URLSearchParams(base);
   let local = null;
   if (near) {
@@ -171,10 +232,13 @@ export async function search(query, near) {
       bbox: [near.lng - dLng, near.lat - dLat, near.lng + dLng, near.lat + dLat].map((v) => v.toFixed(4)).join(',') });
   }
   // "Rua Augusta 500": se o Photon não tiver aquele número, a busca com número às vezes não
-  // traz a rua; uma consulta a mais, só pela rua e só perto de você, garante a rua certa.
-  const { street, number } = splitHouseNumber(query);
+  // traz a rua; uma consulta a mais, só pela rua, garante a rua certa. Sem bairro/cidade
+  // digitados, procura perto de você; com eles ("… - Vila Esperança, Maringá"), em todo lugar.
   let streetOnly = null;
-  if (local && number) { streetOnly = new URLSearchParams(local); streetOnly.set('q', street); }
+  if (addr.number) {
+    streetOnly = new URLSearchParams(addr.area || !local ? global : local);
+    streetOnly.set('q', [addr.street, addr.area].filter(Boolean).join(', '));
+  }
   const [gr, lr, sr] = await Promise.allSettled([
     photon(global, signal),
     local ? photon(local, signal) : Promise.resolve([]),

@@ -1,7 +1,7 @@
 // Busca (js/geocoder.js): ordem por proximidade e as duas consultas ao Photon.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tokens, nameMatches, rankResults, dedupe, splitHouseNumber, search, featureToPlace, reverseAddress } from '../js/geocoder.js';
+import { tokens, nameMatches, rankResults, dedupe, parseAddress, search, featureToPlace, reverseAddress } from '../js/geocoder.js';
 import { CONFIG } from '../js/config.js';
 import { json, hangingFetch, withFetch } from './helpers.js';
 
@@ -211,13 +211,56 @@ test('rankResults: abreviação "Av" bate com "Avenida" no endereço exato', () 
   assert.equal(out[0].housenumber, '1000');
 });
 
-test('splitHouseNumber: número no fim; rodovia e número solto não contam', () => {
-  assert.deepEqual(splitHouseNumber('Rua Augusta 500'), { street: 'Rua Augusta', number: '500' });
-  assert.deepEqual(splitHouseNumber('Av. Paulista, 1000'), { street: 'Av. Paulista', number: '1000' });
-  assert.deepEqual(splitHouseNumber('Rua X nº 12'), { street: 'Rua X', number: '12' });
-  assert.equal(splitHouseNumber('Rua 13 de Maio').number, null);
-  assert.equal(splitHouseNumber('BR 101').number, null);
-  assert.equal(splitHouseNumber('500').number, null);
+test('parseAddress: número da casa e abreviações; rodovia e número solto não contam', () => {
+  const pa = (q) => { const r = parseAddress(q); return [r.street, r.number, r.area]; };
+  assert.deepEqual(pa('Rua Augusta 500'), ['Rua Augusta', '500', '']);
+  assert.deepEqual(pa('Av. Paulista, 1000'), ['Avenida Paulista', '1000', '']);
+  assert.deepEqual(pa('Rua X nº 12'), ['Rua X', '12', '']);
+  assert.equal(parseAddress('Rua 13 de Maio').number, null);
+  assert.equal(parseAddress('BR 101').number, null);
+  assert.equal(parseAddress('500').number, null);
+});
+
+test('parseAddress: formato brasileiro "R. Srg. Rui Alves, 192 - Vila Esperança"', () => {
+  const r = parseAddress('R. Srg. Rui Alves, 192 - Vila Esperança');
+  assert.equal(r.street, 'Rua Sargento Rui Alves');
+  assert.equal(r.number, '192');
+  assert.equal(r.area, 'Vila Esperança');
+  assert.equal(r.text, 'Rua Sargento Rui Alves 192, Vila Esperança');
+});
+
+test('parseAddress: endereço completo com cidade, UF e CEP', () => {
+  const r = parseAddress('Rua Sargento Rui Alves 192, Vila Esperança, Maringá - PR, 87020-000');
+  assert.equal(r.number, '192');
+  assert.equal(r.area, 'Vila Esperança, Maringá');
+  assert.ok(!/PR|87020/.test(r.text), r.text);
+});
+
+test('parseAddress: não mexe em nomes que não são endereço', () => {
+  for (const q of ['Dr. Consulta', "McDonald's", 'Parque Ibirapuera', 'farmácia']) assert.equal(parseAddress(q).text, q);
+  assert.equal(parseAddress('Av Brasil').text, 'Avenida Brasil');
+  assert.equal(parseAddress('Rua Dom Pedro II, 1500 - Centro').street, 'Rua Dom Pedro II', '"Dom" por extenso fica');
+});
+
+test('rankResults: rua do endereço digitado (sem o número no mapa), a do bairro digitado primeiro', () => {
+  const sp = { lng: -46.6559, lat: -23.5614 }; // a pessoa está em São Paulo, o endereço é em Maringá
+  const out = rankResults([
+    P('Rua Sargento Rui Alves', -46.6, -23.6, 'street', 'highway', { city: 'São Paulo', address: 'Centro, São Paulo' }),
+    P('Rua Sargento Rui Alves', -51.93, -23.41, 'street', 'highway', { city: 'Maringá', address: 'Vila Esperança, Maringá, Paraná' }),
+    P('Vila Esperança', -51.93, -23.41, 'district', 'place', { osmValue: 'suburb' }),
+  ], 'R. Srg. Rui Alves, 192 - Vila Esperança', sp);
+  assert.equal(out[0].city, 'Maringá');
+});
+
+test('search: endereço brasileiro vai expandido ao Photon e a consulta só da rua leva o bairro', async () => {
+  await withFetch(() => json({ features: [] }), async (calls) => {
+    await search('R. Srg. Rui Alves, 192 - Vila Esperança', near);
+    const qs = calls.map((c) => new URL(c.url).searchParams.get('q'));
+    assert.ok(qs.includes('Rua Sargento Rui Alves 192, Vila Esperança'), qs.join(' | '));
+    const so = calls.find((c) => new URL(c.url).searchParams.get('q') === 'Rua Sargento Rui Alves, Vila Esperança');
+    assert.ok(so, 'consulta só da rua');
+    assert.ok(!so.url.includes('bbox='), 'com bairro digitado, procura em todo lugar (não só perto)');
+  });
 });
 
 test('dedupe: trechos da mesma rua, mesma cidade (ponto + limite) e endereço repetido', () => {
