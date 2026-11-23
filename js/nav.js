@@ -43,6 +43,9 @@ export function startNav({ route, profile, destination, stops = [], simulate = f
   nav.unsub.push(bus.on('position', ({ position }) => { if (!nav.sim) onPosition(position); }));
   nav.unsub.push(bus.on('map:userpan', () => setFollowing(false)));
   nav.unsub.push(bus.on('map3d:changed', update3DButton));
+  // menu "⋯" e passo a passo fecham com um toque fora deles (antes ficavam cobrindo o velocímetro)
+  document.addEventListener('pointerdown', closeOnOutside, true);
+  nav.unsub.push(() => document.removeEventListener('pointerdown', closeOnOutside, true));
 
   if (simulate) startSimulation();
   else if (state.userPosition) onPosition(state.userPosition);
@@ -185,6 +188,13 @@ function overview() {
 function closePopovers() {
   ui.menu?.remove(); ui.menu = null;
   ui.steps?.remove(); ui.steps = null;
+}
+
+function closeOnOutside(e) {
+  if (!ui.menu && !ui.steps) return;
+  const t = e.target;
+  if (ui.menu?.contains(t) || ui.steps?.contains(t) || ui.menuBtn?.contains(t)) return;
+  closePopovers();
 }
 
 function toggleMenu() {
