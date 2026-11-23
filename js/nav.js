@@ -240,7 +240,7 @@ function nextStep(progress, after = 0) {
 function onPosition(pos) {
   if (!nav || nav.arrived) return;
   const p = [pos.lng, pos.lat];
-  const s = snap(nav.prep, p, nav.hint);
+  const s = snap(nav.prep, p, nav.hint, nav.progress);
   if (!Number.isFinite(s.offset)) return;
   nav.hint = s.idx;
 

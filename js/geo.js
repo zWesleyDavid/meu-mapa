@@ -40,8 +40,17 @@ export function prepareRoute(route) {
   return { ...route, coords, cum, total, steps };
 }
 
-/** Projeta a posição na rota. Retorna { offset, along, idx, point, bearing }. */
-export function snap(prep, pos, hint = 0) {
+/**
+ * Projeta a posição na rota. Retorna { offset, along, idx, point, bearing }.
+ * `prevAlong` (progresso anterior, em metros): quando a rota passa duas vezes pelo mesmo lugar
+ * (cruza a si mesma, ou vai e volta pela mesma rua até uma parada), o trecho mais perto pode
+ * ser um que você já percorreu. Voltar no progresso custa caro e avançar muito custa um pouco,
+ * então ganha o trecho coerente com onde você estava — e a placa não volta para uma manobra
+ * que já passou.
+ */
+export const SNAP_BACK_COST = 0.5;   // cada metro "para trás" vale meio metro de distância da rota
+export const SNAP_AHEAD_COST = 0.05; // cada metro à frente vale 5 cm (GPS que pulou continua ok)
+export function snap(prep, pos, hint = 0, prevAlong = null) {
   const { coords, cum } = prep;
   const lat0 = rad(pos[1]);
   const kx = 111320 * Math.cos(lat0);
@@ -50,7 +59,7 @@ export function snap(prep, pos, hint = 0) {
   const py = pos[1] * ky;
   const start = Math.max(0, hint - 30);
   const end = coords.length - 1;
-  let best = { offset: Infinity };
+  let best = { offset: Infinity, cost: Infinity };
   for (let i = start; i < end; i++) {
     const ax = coords[i][0] * kx, ay = coords[i][1] * ky;
     const bx = coords[i + 1][0] * kx, by = coords[i + 1][1] * ky;
@@ -60,15 +69,18 @@ export function snap(prep, pos, hint = 0) {
     t = Math.max(0, Math.min(1, t));
     const qx = ax + t * dx, qy = ay + t * dy;
     const off = Math.hypot(px - qx, py - qy);
-    if (off < best.offset) {
-      const seg = cum[i + 1] - cum[i];
+    const along = cum[i] + (cum[i + 1] - cum[i]) * t;
+    const cost = prevAlong == null ? off
+      : off + SNAP_BACK_COST * Math.max(0, prevAlong - along) + SNAP_AHEAD_COST * Math.max(0, along - prevAlong);
+    if (cost < best.cost) {
       best = {
-        offset: off, idx: i, along: cum[i] + seg * t,
+        cost, offset: off, idx: i, along,
         point: [qx / kx, qy / ky], bearing: bearing(coords[i], coords[i + 1]),
       };
     }
-    // a partir de um ponto bom, para de procurar longe demais à frente
-    if (best.offset < 15 && cum[i] - best.along > 400) break;
+    // a partir de um ponto bom (perto da rota e coerente com o progresso), para de procurar
+    // longe demais à frente
+    if (best.cost < 15 && cum[i] - best.along > 400) break;
   }
   return best;
 }

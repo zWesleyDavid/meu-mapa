@@ -127,3 +127,50 @@ test('zoom por velocidade: nunca aproxima quando acelera', () => {
   let prev = Infinity;
   for (let k = 0; k <= 150; k += 5) { const z = interpolate(CONFIG.nav.zoomBySpeed, k); assert.ok(z <= prev + 1e-12); prev = z; }
 });
+
+// ---------------- rota que passa duas vezes pelo mesmo lugar (teste ao vivo, nov/2026) ----------------
+// Vai até uma parada no fim de uma rua e volta pela mesma rua: 0 → 0,004° → 0 → 0 , -0,004°
+const outAndBack = {
+  distance: 1336,
+  geometry: { coordinates: [[0, 0], [0.004, 0], [0.004, 0.00001], [0, 0.00001], [0, -0.004]] },
+  steps: [{ location: [0, 0] }, { location: [0.004, 0] }, { location: [0, 0.00001] }, { location: [0, -0.004] }],
+};
+// Cruza o próprio caminho: sobe, dá a volta no quarteirão e passa de novo pelo começo
+const crossing = {
+  distance: 2000,
+  geometry: { coordinates: [[0, -0.002], [0, 0.002], [0.002, 0.002], [0.002, 0], [-0.002, 0]] },
+  steps: [{ location: [0, -0.002] }, { location: [-0.002, 0] }],
+};
+
+test('snap: na volta pela mesma rua, o progresso não volta para a ida', () => {
+  const p = prepareRoute(outAndBack);
+  let prev = null; let hint = 0;
+  for (let a = 0; a < p.total; a += 10) {
+    const s = snap(p, pointAt(p, a).point, hint, prev);
+    near(s.along, a, 2, `em ${a} m`);
+    prev = s.along; hint = s.idx;
+  }
+});
+
+test('snap: rota que cruza a si mesma — no cruzamento continua no trecho atual', () => {
+  const p = prepareRoute(crossing);
+  let prev = null; let hint = 0;
+  for (let a = 0; a < p.total; a += 10) {
+    const s = snap(p, pointAt(p, a).point, hint, prev);
+    near(s.along, a, 2, `em ${a} m`);
+    prev = s.along; hint = s.idx;
+  }
+});
+
+test('snap: sem progresso anterior, continua pegando o trecho mais perto (como antes)', () => {
+  const p = prepareRoute(outAndBack);
+  const s = snap(p, [0.002, 0.000005]); // no meio da rua de ida e volta: o primeiro trecho vence
+  assert.ok(s.along < p.total / 2);
+});
+
+test('snap: GPS que pula para a frente (túnel) ainda é aceito', () => {
+  const p = prepareRoute(route);
+  const s = snap(p, [0.008, 0], 0, 100); // estava em 100 m, aparece em ~890 m
+  near(s.along, 890, 3);
+  near(s.offset, 0, 0.5);
+});
