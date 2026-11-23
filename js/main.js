@@ -196,6 +196,7 @@ function renderPlace() {
     onDirections: () => openDirections(place),
     onSave: () => { const on = toggleSaved(place); toast(on ? 'Salvo' : 'Removido dos salvos'); renderPlace(); },
     onShare: () => sharePlace(place),
+    onRetry: () => { placeDetails = { loading: true }; renderPlace(); loadPlaceDetails(place); },
   });
   // Primeira vez: abre na metade para mostrar o começo dos detalhes; depois só atualiza o conteúdo.
   if (firstOpen) mount(node, 'half');

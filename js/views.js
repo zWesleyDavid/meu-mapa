@@ -10,7 +10,7 @@ import { maneuverIcon } from './maneuvers.js';
 const h = (html) => ({ html });
 
 // ---------------- Lugar ----------------
-export function placeView(place, { info, details, saved, onClose, onDirections, onSave, onShare, onCopy }) {
+export function placeView(place, { info, details, saved, onClose, onDirections, onSave, onShare, onCopy, onRetry }) {
   const stat = (v, unit, label) => el('div', { class: 'stat' },
     el('div', { class: 'stat-v' }, v, unit ? el('small', {}, ` ${unit}`) : null),
     el('div', { class: 'stat-l' }, label));
@@ -51,7 +51,7 @@ export function placeView(place, { info, details, saved, onClose, onDirections, 
       el('button', { class: 'btn primary', onclick: onDirections, ...h(`${icon('directions')}<span>Rotas</span>`) }),
       el('button', { class: 'btn square', 'aria-label': saved ? 'Remover dos salvos' : 'Salvar', 'aria-pressed': String(!!saved), onclick: onSave, ...h(icon('bookmark')) }),
       el('button', { class: 'btn square', 'aria-label': 'Compartilhar', onclick: onShare, ...h(icon('share')) })),
-    detailsSection(place, details, { address, onCopy }));
+    detailsSection(place, details, { address, onCopy, onRetry }));
 }
 
 function infoRow(ico, main, sub, extra) {
@@ -63,7 +63,7 @@ function infoRow(ico, main, sub, extra) {
 
 const ext = (href, text) => el('a', { href, target: '_blank', rel: 'noopener noreferrer' }, text);
 
-function detailsSection(place, details, { address, onCopy }) {
+function detailsSection(place, details, { address, onCopy, onRetry }) {
   const wrap = el('div', { class: 'details' });
   if (!details || details.loading) {
     wrap.append(el('div', { class: 'loading' }, el('span', { class: 'spinner' }), 'Carregando informações…'));
@@ -117,6 +117,8 @@ function detailsSection(place, details, { address, onCopy }) {
     wrap.append(el('p', { class: 'hint' }, d.lookupFailed
       ? 'Não consegui carregar as informações agora.'
       : 'Ainda não há horário ou contato cadastrados para este lugar.'));
+    // servidor de dados fora do ar: dá para tentar de novo sem fechar o lugar
+    if (d.lookupFailed && onRetry) wrap.append(el('button', { class: 'btn retry', onclick: onRetry }, 'Tentar de novo'));
   }
 
   const editUrl = d.osm?.editUrl || `https://www.openstreetmap.org/note/new#map=19/${place.lat.toFixed(6)}/${place.lng.toFixed(6)}`;
