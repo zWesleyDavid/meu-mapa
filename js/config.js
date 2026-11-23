@@ -1,7 +1,7 @@
 // Configuração central. Troque provedores aqui sem mexer no resto do código.
 export const CONFIG = {
   appName: 'Meu Mapa',
-  version: '24',  // suba junto com o VERSION do sw.js
+  version: '25',  // suba junto com o VERSION do sw.js
 
   // Vista inicial antes de achar sua localização (Brasil inteiro).
   initialView: { center: [-51.9, -14.2], zoom: 3.6 },

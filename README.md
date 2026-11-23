@@ -39,7 +39,9 @@ Os testes nunca acessam a internet: o `fetch` é trocado por respostas simuladas
 | Arquivo | O que verifica |
 |---|---|
 | `tests/fetch.test.js` | tempo máximo das chamadas, cancelamento, erros HTTP e de conexão |
-| `tests/geocoder.test.js` | busca: ordem por proximidade, duas consultas ao Photon, falhas e cancelamento |
+| `tests/geocoder.test.js` | busca: ordem por proximidade, repetidos, endereço com número, consultas ao Photon (idioma local), falhas e cancelamento |
+| `tests/mapstyle.test.js` | rótulos do mapa em português (name:pt → nome local → inglês) |
+| `tests/location.test.js` | "Minha localização" tenta de novo depois de permissão negada |
 | `tests/routing.test.js` | instruções em português, paradas, cache e mensagens de erro do OSRM |
 | `tests/places.test.js` | junção de resultados por categoria, servidores reserva do Overpass, detalhes do lugar (inclusive links seguros) |
 | `tests/map3d.test.js` | modo 3D: o que ligar (inclusive bateria fraca), parede da rota, prédio do destino e desenho das setas 3D |
@@ -55,10 +57,10 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
 ## O que já faz
 - Visual próprio: tema escuro (limão) e claro (azul-marinho + coral), seguindo o sistema ou escolhido em Ajustes
 - Topo em estilo de sinalização de trânsito nas rotas e na navegação
-- Mapa com estilo próprio nos dois temas: avenidas em maiúsculas espaçadas, bairros espaçados, escudo de rodovia, nomes mais cedo e maiores, números das casas (`js/mapstyle.js`)
+- Mapa com estilo próprio nos dois temas, nomes em português quando o mapa tem (senão o nome local): avenidas em maiúsculas espaçadas, bairros espaçados, escudo de rodovia, nomes mais cedo e maiores, números das casas (`js/mapstyle.js`)
 - Ícones próprios no estilo "Placa" (desenhados pelo app, `js/mapicons.js`): cor por grupo de categoria, pontinhos de longe e placa com nome de perto
 - Sua localização com **cone de direção** (bússola do celular; no iPhone a permissão é pedida ao tocar no botão de localização)
-- Busca com autocompletar, salvos e recentes, **priorizando o que está perto**: duas consultas em paralelo (geral e num raio de ~30 km), e o que tem o nome digitado aparece do mais perto para o mais longe, com a distância na lista; cidade/bairro com o nome exato e buscas bem específicas (ex.: endereço com número) mantêm a ordem normal
+- Busca com autocompletar, salvos e recentes, **priorizando o que está perto**: duas consultas em paralelo (geral e num raio de ~30 km), e o que tem o nome digitado aparece do mais perto para o mais longe, com a distância na lista. Ordem: cidade/estado/país com o nome exato; endereço com o número digitado (aceita "Av", "R", "Al"…); o nome exatamente igual e perto; o resto que tem o nome, pela distância (pontos de ônibus com o nome do lugar por último); buscas muito específicas na ordem do Photon. Com número no fim ("Rua Augusta 500"), uma consulta a mais só pela rua garante a rua certa mesmo sem aquele número no mapa. Trechos da mesma rua, a mesma cidade repetida e endereços duplicados aparecem uma vez só. Nomes no idioma local (o Photon não tem português; sem isso vinha em inglês)
 - Digitar "mercado", "farmácia", "posto", "padaria"… mostra o atalho "… perto de você", que abre a lista da categoria
 - Categorias rápidas (Comida, Café, Combustível, Farmácia, Mercado): resultados instantâneos dos pontos do próprio mapa + busca completa no OpenStreetMap (várias etiquetas por categoria, servidores reserva, raio ampliado para 5 km se vier pouca coisa, cache de 5 min)
 - Card do lugar com tempo de carro, distância e chegada, e detalhes do OpenStreetMap: endereço, aberto/fechado agora e horários da semana, telefone, WhatsApp, site, Instagram, comodidades e combustíveis, com link para sugerir edição (`js/details.js`, `js/hours.js`)
@@ -66,7 +68,7 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
 - Rotas de carro, bike e a pé, com alternativas e passo a passo em português
 - **Partida, chegada e até 3 paradas**: toque em DE/PARA ou em "+ Adicionar parada" e busque ou toque no mapa; também pelo toque longo ("Adicionar como parada"); inverter inverte a viagem toda
 - **Navegação**: câmera em perspectiva seguindo você, placa da próxima manobra, faixa "Depois",
-  trecho já percorrido em cinza, **zoom dinâmico** (contínuo pela velocidade, tabela em `CONFIG.nav.zoomBySpeed`; aproxima perto das manobras),
+  trecho já percorrido em cinza (em rotas que passam duas vezes pelo mesmo lugar, o progresso não volta para o trecho de ida), **zoom dinâmico** (contínuo pela velocidade, tabela em `CONFIG.nav.zoomBySpeed`; aproxima perto das manobras),
   **faixas** (barra a até ~800 m e **visão da junção em movimento** em pontos confusos, a partir dos dados de faixa do OSM: as faixas andam na sua velocidade real, a faixa certa acende, as outras apagam e a vista acompanha a curva), tempo/distância restantes, velocidade, recálculo automático fora da rota, voz em português,
   tela sempre ligada e visão geral/recentralizar
 - **Simular viagem** (menu ⋯ durante a navegação): percorre a rota sozinho, para testar sem sair de casa.
@@ -78,9 +80,10 @@ Ao publicar uma versão, suba `VERSION` no `sw.js` e `version` no `js/config.js`
 - Setas de manobra próprias (`js/maneuvers.js`) e placa com a distância embaixo da seta
 - **Modo 3D** (Ajustes › Visual do mapa, ou o botão 2D/3D no mapa e na navegação). O padrão continua plano. Cada parte liga separada:
   - prédios com a altura do OpenStreetMap;
-  - relevo com sombreamento (dados abertos do Mapterhorn; usa mais dados móveis);
+  - relevo com sombreamento (dados abertos do Mapterhorn; usa mais dados móveis). A fonte declara o zoom máximo 12 em `CONFIG.map3d.terrain` (o tilejson não informa e o MapLibre pedia até o 22, gerando centenas de erros 404);
   - céu no horizonte;
   - prédio do lugar/destino em destaque na cor do app;
+  - na tela de rotas, os prédios ficam semitransparentes para não esconder a linha;
   - rota em 3D (parede de luz);
   - seta da navegação: bolinha de sempre, **A** (seta 3D estilo Waze) ou **B** (bolinha 3D com a setinha);
   - volta sozinho ao plano com a bateria abaixo de 20% fora da tomada (onde o navegador informa a bateria).
