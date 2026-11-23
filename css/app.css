@@ -386,8 +386,10 @@ svg { flex: none; }
 .user-loc.has-heading .user-cone { opacity: 1; }
 .user-loc .user-dot { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .user-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--puck); border: 3px solid var(--surface); box-shadow: 0 0 0 8px color-mix(in srgb, var(--puck) 22%, transparent), 0 2px 6px rgba(0,0,0,.3); }
-.dest-pin { width: 28px; height: 28px; border-radius: 50%; background: var(--route); border: 3px solid var(--route-casing); box-shadow: 0 0 0 10px color-mix(in srgb, var(--route) 18%, transparent); display: grid; place-items: center; }
-.dest-pin::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--route-casing); }
+.dest-pin { width: 34px; height: 44px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.45)); }
+.dest-pin svg { display: block; width: 100%; height: 100%; }
+.dest-pin .dp-body { fill: var(--route); stroke: var(--route-casing); stroke-width: 2.5; }
+.dest-pin .dp-dot { fill: var(--route-casing); }
 .stop-pin { width: 26px; height: 26px; border-radius: 8px; background: var(--surface); color: var(--text); border: 3px solid var(--route); display: grid; place-items: center; font: 700 13px var(--mono); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
 .origin-pin { width: 20px; height: 20px; border-radius: 50%; background: var(--text); border: 4px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.4); }
 .route-label { font: 700 13px var(--mono); padding: 4px 8px; border-radius: 8px; background: var(--surface); color: var(--text); border: var(--card-border); box-shadow: var(--shadow); cursor: pointer; white-space: nowrap; }

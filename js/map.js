@@ -190,13 +190,18 @@ export function drawPois(places, cat = 'default') {
 // ---------------- Marcadores ----------------
 function div(cls) { const d = document.createElement('div'); d.className = cls; return d; }
 
+const DEST_PIN_SVG = '<svg viewBox="0 0 34 44" aria-hidden="true"><path class="dp-body" d="M17 42.5c-1-.1-1.7-.8-2.2-1.7C10.4 32.4 2 25.4 2 16.5 2 8.2 8.7 1.5 17 1.5s15 6.7 15 15c0 8.9-8.4 15.9-12.8 24.3-.5.9-1.2 1.6-2.2 1.7z"/><circle class="dp-dot" cx="17" cy="16.5" r="5.6"/></svg>';
+
 export function setMarker(kind, place) {
   markers[kind]?.remove();
   markers[kind] = null;
   if (kind in markerPlaces) { markerPlaces[kind] = place && !place.isUser ? place : null; setDestTarget(markerPlaces.destination || markerPlaces.place); }
   if (!place || place.isUser) return;
-  const element = div(kind === 'origin' ? 'origin-pin' : 'dest-pin');
-  markers[kind] = new maplibregl.Marker({ element }).setLngLat([place.lng, place.lat]).addTo(map);
+  const isOrigin = kind === 'origin';
+  const element = div(isOrigin ? 'origin-pin' : 'dest-pin');
+  // destino/lugar: alfinete com a ponta no lugar (antes era uma bolinha parecida com a sua localização)
+  if (!isOrigin) element.innerHTML = DEST_PIN_SVG;
+  markers[kind] = new maplibregl.Marker({ element, anchor: isOrigin ? 'center' : 'bottom' }).setLngLat([place.lng, place.lat]).addTo(map);
 }
 
 let stopMarkers = [];
