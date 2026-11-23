@@ -24,6 +24,9 @@ export const CONFIG = {
     biasScale: 0.15,     // 0 = só distância, 1 = fama do lugar pesa igual
     debounceMs: 250,
     timeoutMs: 8000,     // tempo máximo de cada consulta (busca e endereço)
+    // Idioma dos nomes: o Photon não tem português e, sem isto, segue o navegador e cai no
+    // inglês ("São Paulo Museum of Art", "Spain"). "default" = nome local (no Brasil, português).
+    lang: 'default',
   },
 
   // Rotas: servidores OSRM públicos da FOSSGIS (os mesmos usados no openstreetmap.org).

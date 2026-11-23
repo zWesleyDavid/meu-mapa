@@ -50,6 +50,35 @@ function asExpression(tf) {
   return null;
 }
 
+/**
+ * Rótulos em português: o estilo base prefere o nome em inglês ("Brazil", "São Paulo Museum of Art").
+ * Passa a usar name:pt quando existe; senão o nome local (no Brasil, já em português) e só por
+ * último o inglês. Nomes em escrita não latina continuam como no estilo original.
+ * Expressões que não usam nome (número, ref de rodovia) ficam como estão.
+ */
+export function ptLabel(tf) {
+  const raw = JSON.stringify(tf ?? null);
+  // só mexe em rótulos de nome ("{ref}" vira coalesce(ref, name) no asExpression: não conta)
+  if (!/"get","name|\{name/.test(raw) || raw.includes('name:pt')) return tf;
+  const expr = asExpression(tf);
+  if (!expr) return tf;
+  const swap = (e) => {
+    if (!Array.isArray(e)) return e;
+    if (e[0] === 'coalesce') {
+      const args = e.slice(1).map(swap);
+      const isEn = (a) => Array.isArray(a) && a[0] === 'get' && (a[1] === 'name_en' || a[1] === 'name:en');
+      const isLocal = (a) => Array.isArray(a) && a[0] === 'get' && a[1] === 'name';
+      // inglês antes do local → local antes do inglês
+      const iEn = args.findIndex(isEn);
+      const iLocal = args.findIndex(isLocal);
+      if (iEn >= 0 && iLocal > iEn) { const [en] = args.splice(iEn, 1); args.splice(args.findIndex(isLocal) + 1, 0, en); }
+      return ['coalesce', ...args];
+    }
+    return e.map(swap);
+  };
+  return ['coalesce', ['get', 'name:pt'], swap(expr)];
+}
+
 /** POIs com os ícones próprios: pontinho de longe, placa com nome de perto (os mais importantes antes). */
 function styleIconLayer(l, theme) {
   const important = ['<=', ['to-number', ['get', 'rank'], 99], 4];
@@ -130,6 +159,7 @@ export async function buildStyle(theme) {
 
       case 'symbol': {
         if (!l.layout['text-field']) break;
+        l.layout['text-field'] = ptLabel(l.layout['text-field']);
         font = font || l.layout['text-font'];
         const halo = () => { setPaint(l, 'text-halo-color', c.halo); setPaint(l, 'text-halo-width', 1.6); setPaint(l, 'text-halo-blur', 0.4); };
 

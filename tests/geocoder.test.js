@@ -144,3 +144,12 @@ test('reverseAddress: monta "Rua, número · bairro, cidade"', async () => {
     assert.equal(await reverseAddress(0, 0), 'Rua A, 5 · Centro, Floripa');
   });
 });
+
+test('Photon: pede o nome local (lang=default), não o inglês do navegador', async () => {
+  await withFetch(() => json({ features: [] }), async (calls) => {
+    await search('masp', near);
+    await reverseAddress(-48.5, -27.5);
+    assert.ok(calls.length >= 3);
+    for (const c of calls) assert.equal(new URL(c.url).searchParams.get('lang'), 'default', c.url);
+  });
+});

@@ -96,7 +96,7 @@ export async function search(query, near) {
   controller = new AbortController();
   const { signal } = controller;
   const g = CONFIG.geocoder;
-  const base = { q: query, limit: g.limit };
+  const base = { q: query, limit: g.limit, lang: g.lang };
   const global = new URLSearchParams(base);
   let local = null;
   if (near) {
@@ -119,7 +119,7 @@ export async function search(query, near) {
 }
 
 export async function reverse(lng, lat) {
-  const params = new URLSearchParams({ lon: lng, lat, limit: 1 });
+  const params = new URLSearchParams({ lon: lng, lat, limit: 1, lang: CONFIG.geocoder.lang });
   const data = await fetchJSON(`${CONFIG.geocoder.reverse}?${params}`, { timeout: CONFIG.geocoder.timeoutMs });
   const f = data.features?.[0];
   if (!f) return null;
@@ -130,7 +130,7 @@ export async function reverse(lng, lat) {
 
 /** Endereço legível de um ponto: "Rua X, 123 · Bairro, Cidade" (ou null). */
 export async function reverseAddress(lng, lat) {
-  const params = new URLSearchParams({ lon: lng, lat, limit: 1 });
+  const params = new URLSearchParams({ lon: lng, lat, limit: 1, lang: CONFIG.geocoder.lang });
   let data;
   try {
     data = await fetchJSON(`${CONFIG.geocoder.reverse}?${params}`, { timeout: CONFIG.geocoder.timeoutMs });
