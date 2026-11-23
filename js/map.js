@@ -141,7 +141,22 @@ function addLayers() {
   }
 }
 
+// Visão geral das rotas (tela de rotas, fora da navegação): no 3D, os prédios ficam
+// semitransparentes para não esconder a linha da rota atrás deles.
+let routesOverview = false;
+const BUILDING_OPACITY = 0.9;
+const BUILDING_OPACITY_ROUTES = 0.45;
+const buildingOpacity = () => (routesOverview ? BUILDING_OPACITY_ROUTES : BUILDING_OPACITY);
+function updateBuildingOpacity() {
+  if (!opts3d.buildings) return;
+  for (const id of Object.keys(extrusionDefaults)) {
+    if (map.getLayer(id)) map.setPaintProperty(id, 'fill-extrusion-opacity', buildingOpacity());
+  }
+}
+
 export function drawRoutes(routes, selected, { labels = true } = {}) {
+  const overview = routes.length > 0 && labels;
+  if (overview !== routesOverview) { routesOverview = overview; updateBuildingOpacity(); }
   routeData = {
     type: 'FeatureCollection',
     features: routes
@@ -290,7 +305,7 @@ function apply3D(prev) {
   // prédios do estilo
   for (const [id, def] of Object.entries(extrusionDefaults)) {
     if (!map.getLayer(id)) continue;
-    if (o.buildings) { map.setLayoutProperty(id, 'visibility', 'visible'); map.setPaintProperty(id, 'fill-extrusion-opacity', 0.9); }
+    if (o.buildings) { map.setLayoutProperty(id, 'visibility', 'visible'); map.setPaintProperty(id, 'fill-extrusion-opacity', buildingOpacity()); }
     else if (o.on) map.setLayoutProperty(id, 'visibility', 'none');
     else { map.setLayoutProperty(id, 'visibility', def.visibility || 'visible'); map.setPaintProperty(id, 'fill-extrusion-opacity', def.opacity ?? 1); }
   }
