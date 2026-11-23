@@ -291,8 +291,8 @@ function apply3D(prev) {
   }
   // relevo + sombreamento
   if (o.terrain) {
-    if (!map.getSource('mm-dem')) map.addSource('mm-dem', { type: 'raster-dem', url: CONFIG.map3d.terrainUrl });
-    if (!map.getSource('mm-hs')) map.addSource('mm-hs', { type: 'raster-dem', url: CONFIG.map3d.terrainUrl });
+    if (!map.getSource('mm-dem')) map.addSource('mm-dem', { type: 'raster-dem', ...CONFIG.map3d.terrain });
+    if (!map.getSource('mm-hs')) map.addSource('mm-hs', { type: 'raster-dem', ...CONFIG.map3d.terrain });
     if (!map.getLayer('mm-hillshade')) {
       const before = map.getStyle().layers.find((l) => l.type === 'line' || l.type === 'symbol' || l.type === 'fill-extrusion')?.id;
       map.addLayer({

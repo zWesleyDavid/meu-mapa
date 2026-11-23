@@ -76,3 +76,11 @@ test('categorias: ids únicos e palavras de atalho sem repetição entre categor
   assert.equal(new Set(words).size, words.length);
   for (const w of words) assert.equal(w, w.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(), `palavra deve estar sem acento e minúscula: ${w}`);
 });
+
+test('relevo do 3D declara o zoom máximo que o servidor tem (evita centenas de 404)', () => {
+  const t = CONFIG.map3d.terrain;
+  assert.ok(Array.isArray(t.tiles) && t.tiles[0].includes('{z}/{x}/{y}'), 'precisa de "tiles", não do tilejson sem maxzoom');
+  assert.equal(t.encoding, 'terrarium');
+  assert.ok(t.maxzoom <= 12, `maxzoom ${t.maxzoom}: no Brasil só existem blocos até o 12`);
+  assert.ok(/Mapterhorn/.test(t.attribution), 'atribuição obrigatória');
+});

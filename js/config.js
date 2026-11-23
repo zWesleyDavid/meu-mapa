@@ -79,7 +79,14 @@ export const CONFIG = {
   map3d: {
     pitch: 50,                 // inclinação do mapa fora da navegação no modo 3D
     // relevo: dados de altitude abertos e gratuitos (os mesmos do exemplo oficial do MapLibre)
-    terrainUrl: 'https://tiles.mapterhorn.com/tilejson.json',
+    // Declarado aqui (e não pelo tilejson.json) porque o tilejson não informa o zoom máximo:
+    // o MapLibre pedia até o zoom 22, e no Brasil só existem blocos até o 12 → centenas de
+    // pedidos com erro 404 por minuto em 3D. Acima de 12 o MapLibre amplia o bloco 12.
+    terrain: {
+      tiles: ['https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'],
+      encoding: 'terrarium', tileSize: 512, maxzoom: 12,
+      attribution: "<a href='https://mapterhorn.com/attribution'>© Mapterhorn</a>",
+    },
     exaggeration: 1.3,         // exagero do relevo (1 = real)
     destMinZoom: 15,           // abaixo disso os prédios nem aparecem no mapa
   },
