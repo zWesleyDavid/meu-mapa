@@ -1,12 +1,12 @@
 // Busca (js/geocoder.js): ordem por proximidade e as duas consultas ao Photon.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tokens, nameMatches, rankResults, search, featureToPlace, reverseAddress } from '../js/geocoder.js';
+import { tokens, nameMatches, rankResults, dedupe, splitHouseNumber, search, featureToPlace, reverseAddress } from '../js/geocoder.js';
 import { CONFIG } from '../js/config.js';
 import { json, hangingFetch, withFetch } from './helpers.js';
 
 const near = { lng: -48.42, lat: -27.44 }; // Ingleses, Florianópolis
-const P = (name, lng, lat, type = 'house', osmKey = 'amenity') => ({ id: `${name}@${lng}`, name, lng, lat, type, osmKey });
+const P = (name, lng, lat, type = 'house', osmKey = 'amenity', extra = {}) => ({ id: `${name}@${lng}`, name, lng, lat, type, osmKey, osmValue: '', housenumber: '', city: '', ...extra });
 
 test('tokens: sem acento, sem apóstrofo, sem palavras vazias', () => {
   assert.deepEqual(tokens("McDonald’s"), ['mcdonalds']);
@@ -42,8 +42,9 @@ test('rankResults: busca específica que não bate com o nome mantém a ordem do
   assert.equal(out[0].name, 'Aeroporto Internacional de Guarulhos');
 });
 
-test('rankResults: endereço com número mantém a ordem do Photon', () => {
-  const out = rankResults([P('Rua Felipe Schmidt', -48.55, -27.59), P('Rua Felipe Schmidt', -48.42, -27.44, 'street', 'highway')], 'rua felipe schmidt 300', near);
+test('rankResults: o endereço com o número digitado vem antes da rua sem número', () => {
+  // (o Photon devolve o número no campo housenumber; antes este teste não o tinha)
+  const out = rankResults([P('Rua Felipe Schmidt, 300', -48.55, -27.59, 'house', 'place', { housenumber: '300' }), P('Rua Felipe Schmidt', -48.42, -27.44, 'street', 'highway')], 'rua felipe schmidt 300', near);
   assert.equal(Math.round(out[0].dist / 1000), 21);
 });
 
@@ -152,4 +153,108 @@ test('Photon: pede o nome local (lang=default), não o inglês do navegador', as
     assert.ok(calls.length >= 3);
     for (const c of calls) assert.equal(new URL(c.url).searchParams.get('lang'), 'default', c.url);
   });
+});
+
+// ---------------- regras do teste ao vivo (nov/2026) ----------------
+test('rankResults: bairro longe com o nome exato NÃO passa na frente do lugar perto', () => {
+  // "Parque Ibirapuera" trazia um bairro de Goiás (801 km) antes do parque (2 km)
+  const sp = { lng: -46.6559, lat: -23.5614 };
+  const out = rankResults([
+    P('Parque Ibirapuera', -49.336, -16.812, 'district', 'place', { osmValue: 'suburb' }),
+    P('Parque Ibirapuera', -46.659, -23.588, 'other', 'leisure', { osmValue: 'park' }),
+  ], 'Parque Ibirapuera', sp);
+  assert.equal(out[0].osmKey, 'leisure');
+});
+
+test('rankResults: nome exatamente igual antes de quem só contém as palavras (mesmo mais perto)', () => {
+  const sp = { lng: -46.6559, lat: -23.5614 };
+  const out = rankResults([
+    P('Lagoa Parque Ibirapuera', -46.661, -23.582, 'other', 'water'),
+    P('Parque Ibirapuera', -46.659, -23.588, 'other', 'leisure', { osmValue: 'park' }),
+    P('Parque Ibirapuera', -49.336, -16.812, 'district', 'place', { osmValue: 'suburb' }), // igual, mas a 800 km
+  ], 'Parque Ibirapuera', sp);
+  assert.deepEqual(out.map((p) => Math.round(p.dist / 1000)), [3, 2, 801]);
+});
+
+test('rankResults: ponto de ônibus com o nome do lugar fica depois do lugar', () => {
+  const sp = { lng: -46.6559, lat: -23.5614 };
+  const out = rankResults([
+    P('Parque Ibirapuera', -46.662, -23.579, 'house', 'highway', { osmValue: 'bus_stop' }), // mais perto
+    P('Parque Ibirapuera', -46.659, -23.588, 'other', 'leisure', { osmValue: 'park' }),
+  ], 'Parque Ibirapuera', sp);
+  assert.deepEqual(out.map((p) => p.osmValue), ['park', 'bus_stop']);
+});
+
+test('rankResults: cidade que vem como "district" do Photon (relação place=city) ainda é cidade', () => {
+  const out = rankResults([P('Rua Campinas', -48.42, -27.44, 'street', 'highway'), P('Campinas', -47.06, -22.9, 'district', 'place', { osmValue: 'city' })], 'Campinas', near);
+  assert.equal(out[0].name, 'Campinas');
+});
+
+test('rankResults: "Rua Augusta 500" sem o número no Photon → a rua perto primeiro', () => {
+  const sp = { lng: -46.6559, lat: -23.5614 };
+  const out = rankResults([
+    P('Rua Augusta', -46.53, -23.66, 'street', 'highway', { city: 'Santo André' }),            // 20 km
+    P('Rua Constâncio Colalilo, 500', -46.5, -23.45, 'house', 'place', { housenumber: '500' }), // outra rua
+    P('Rua Augusta Diogo Ayala, 500', -47.27, -22.82, 'house', 'place', { housenumber: '500' }), // outra rua, 96 km
+    P('Rua Augusta', -46.659, -23.556, 'street', 'highway', { city: 'São Paulo' }),            // 600 m
+  ], 'Rua Augusta 500', sp);
+  assert.equal(out[0].city, 'São Paulo');
+  assert.equal(out[1].city, 'Santo André');
+});
+
+test('rankResults: abreviação "Av" bate com "Avenida" no endereço exato', () => {
+  const sp = { lng: -46.6559, lat: -23.5614 };
+  const out = rankResults([
+    P("McDonald's", -46.656, -23.561),
+    P('Avenida Paulista, 1000', -46.652, -23.566, 'house', 'place', { housenumber: '1000' }),
+  ], 'Av Paulista 1000', sp);
+  assert.equal(out[0].housenumber, '1000');
+});
+
+test('splitHouseNumber: número no fim; rodovia e número solto não contam', () => {
+  assert.deepEqual(splitHouseNumber('Rua Augusta 500'), { street: 'Rua Augusta', number: '500' });
+  assert.deepEqual(splitHouseNumber('Av. Paulista, 1000'), { street: 'Av. Paulista', number: '1000' });
+  assert.deepEqual(splitHouseNumber('Rua X nº 12'), { street: 'Rua X', number: '12' });
+  assert.equal(splitHouseNumber('Rua 13 de Maio').number, null);
+  assert.equal(splitHouseNumber('BR 101').number, null);
+  assert.equal(splitHouseNumber('500').number, null);
+});
+
+test('dedupe: trechos da mesma rua, mesma cidade (ponto + limite) e endereço repetido', () => {
+  const out = dedupe([
+    P('Rua Augusta', -46.659, -23.556, 'street', 'highway', { city: 'São Paulo' }),
+    P('Rua Augusta', -46.661, -23.559, 'street', 'highway', { city: 'São Paulo' }),
+    P('Rua Augusta', -46.53, -23.66, 'street', 'highway', { city: 'Santo André' }), // outra cidade: fica
+    { ...P('Campinas', -47.06, -22.906, 'district', 'place'), id: 'R1' },
+    { ...P('Campinas', -47.06, -22.906, 'city', 'place'), id: 'R2' },
+    { ...P('Campinas', -45.4, -22.96, 'district', 'place'), id: 'N3' },              // outro bairro longe: fica
+    { ...P('Rua A, 500', -47.27, -22.82), address: 'Área Cura, Sumaré', id: 'a1' },
+    { ...P('Rua A, 500', -47.27, -22.82), address: 'Área Cura, Sumaré', id: 'a2' },
+  ]);
+  assert.equal(out.filter((p) => p.name === 'Rua Augusta').length, 2);
+  assert.deepEqual(out.filter((p) => p.name === 'Campinas').map((p) => p.id), ['R1', 'N3']);
+  assert.equal(out.filter((p) => p.name === 'Rua A, 500').length, 1);
+});
+
+test('search: com número no fim, faz uma consulta a mais só pela rua (perto de você)', async () => {
+  await withFetch(() => json({ features: [] }), async (calls) => {
+    await search('Rua Augusta 500', near);
+    const qs = calls.map((c) => new URL(c.url).searchParams.get('q'));
+    assert.equal(calls.length, 3);
+    assert.ok(qs.includes('Rua Augusta'));
+    assert.ok(calls.find((c) => new URL(c.url).searchParams.get('q') === 'Rua Augusta').url.includes('bbox='));
+  });
+  await withFetch(() => json({ features: [] }), async (calls) => {
+    await search("McDonald's", near);
+    assert.equal(calls.length, 2, 'sem número: só as duas de sempre');
+  });
+});
+
+test('rankResults: palavra solta ("farmácia") continua só pela distância', () => {
+  const sp = { lng: -46.6559, lat: -23.5614 };
+  const out = rankResults([
+    P('Farmácia', -46.5, -23.7),                // "Farmácia" sem nome próprio, 20 km
+    P('Farmácia DrugsStore', -46.661, -23.565), // 700 m
+  ], 'farmácia', sp);
+  assert.equal(out[0].name, 'Farmácia DrugsStore');
 });

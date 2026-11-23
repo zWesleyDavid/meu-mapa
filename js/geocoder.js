@@ -35,6 +35,9 @@ export function featureToPlace(f) {
     hasStreet: !!street,
     type: p.type || '',          // house | street | city | district | other…
     osmKey: p.osm_key || '',
+    osmValue: p.osm_value || '',
+    housenumber: p.housenumber || '',
+    city: p.city || p.county || '',
     lng, lat,
     bbox: p.extent ? [p.extent[0], p.extent[3], p.extent[2], p.extent[1]] : null, // [w,s,e,n]
   };
@@ -47,9 +50,14 @@ let controller;
 //  1) geral, com viés de localização (o Photon já pesa a distância);
 //  2) só dentro de ~30 km de você, para garantir que as opções próximas apareçam
 //     mesmo quando existe uma mais "famosa" longe (ex.: McDonald's, mercado, farmácia).
-// Depois reordenamos: área com o nome exato (cidade, bairro) primeiro; em seguida tudo
-// cujo nome bate com o que foi digitado, do mais perto para o mais longe; por fim o resto
-// na ordem do Photon (buscas muito específicas, endereço com número etc.).
+// Depois reordenamos (rankResults) e tiramos repetidos (dedupe):
+//  1) cidade, estado ou país com o nome exato (ex.: "Campinas"), mesmo longe;
+//  2) endereço com o número digitado (ex.: "Av Paulista 1000"), na ordem do Photon;
+//  3) o que tem o nome digitado — incluindo bairros e, se houver número no fim, a rua sem
+//     o número: primeiro o nome exatamente igual (até ~30 km), depois o resto, cada grupo
+//     do mais perto para o mais longe; pontos de ônibus com o mesmo nome do lugar vão
+//     para o fim deste grupo (quem busca "Parque Ibirapuera" quer o parque);
+//  4) o resto, na ordem do Photon (buscas muito específicas etc.).
 
 const STOP = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'a', 'o', 'the']);
 export function tokens(s) {
@@ -59,6 +67,28 @@ export function tokens(s) {
 }
 const AREA_TYPES = new Set(['city', 'county', 'state', 'country', 'district', 'locality']);
 const isArea = (p) => AREA_TYPES.has(p.type) || p.osmKey === 'place' || p.osmKey === 'boundary';
+// áreas grandes: as únicas que passam na frente de tudo quando o nome é exato
+const BIG_TYPES = new Set(['city', 'county', 'state', 'country']);
+const BIG_VALUES = new Set(['city', 'town', 'municipality', 'state', 'country', 'county', 'administrative']);
+const isBigArea = (p) => BIG_TYPES.has(p.type) || (p.osmKey === 'place' && BIG_VALUES.has(p.osmValue));
+const isStreet = (p) => p.osmKey === 'highway' && p.type === 'street';
+const isTransitStop = (p) => (p.osmKey === 'highway' && p.osmValue === 'bus_stop')
+  || p.osmKey === 'public_transport' || (p.osmKey === 'railway' && /platform|stop|halt/.test(p.osmValue || ''));
+
+// abreviações comuns de logradouro (para "Av Paulista 1000" bater com "Avenida Paulista, 1000")
+const ABBR = { av: 'avenida', r: 'rua', al: 'alameda', pc: 'praca', pca: 'praca', rod: 'rodovia', est: 'estrada', tv: 'travessa', trav: 'travessa', estr: 'estrada', lgo: 'largo', vd: 'viaduto' };
+const streetKey = (s) => tokens(s).filter((t) => !/^\d+[a-z]?$/.test(t)).map((t) => ABBR[t] || t).join(' ');
+
+/** Número da casa no fim da busca ("Rua Augusta 500", "Av. Paulista, 1000", "Rua X nº 12"). */
+const TRAILING_NUMBER = /[\s,]+(?:n[º°o.]?\s*)?(\d+[a-z]?)\s*$/i;
+export function splitHouseNumber(query) {
+  const q = String(query || '').trim();
+  const m = q.match(TRAILING_NUMBER);
+  if (!m) return { street: q, number: null };
+  const street = q.slice(0, m.index).trim();
+  // precisa de uma palavra de verdade antes do número ("BR 101", "SP 55" são rodovias, não endereço)
+  return tokens(street).some((t) => /^[a-z]{3,}$/.test(t)) ? { street, number: m[1].toLowerCase() } : { street: q, number: null };
+}
 
 /** O nome contém todas as palavras digitadas (a última pode estar pela metade). */
 export function nameMatches(name, qTokens) {
@@ -72,18 +102,50 @@ export function nameMatches(name, qTokens) {
 export function rankResults(places, query, near) {
   const q = tokens(query);
   const qKey = q.join(' ');
+  const { street, number } = splitHouseNumber(query);
+  const wanted = number ? streetKey(street) : null;
+  const nearM = CONFIG.geocoder.nearKm * 1000;
   const list = places.map((p, i) => ({
     ...p, order: i,
     dist: near ? distance([near.lng, near.lat], [p.lng, p.lat]) : null,
   }));
-  const pinned = [], close = [], rest = [];
+  const pinned = [], address = [], close = [], rest = [];
   for (const p of list) {
-    if (isArea(p) && tokens(p.name).join(' ') === qKey) pinned.push(p);
-    else if (near && !isArea(p) && nameMatches(p.name, q)) close.push(p);
+    const sameStreet = number && streetKey(p.name) === wanted;
+    if (isBigArea(p) && tokens(p.name).join(' ') === qKey) pinned.push(p);
+    // o endereço exato (rua + número) perto de você; longe, entra no grupo seguinte pela distância
+    else if (sameStreet && (p.housenumber || '').toLowerCase() === number && (p.dist == null || p.dist <= nearM)) address.push(p);
+    else if (near && !isBigArea(p) && (nameMatches(p.name, q) || (sameStreet && (isStreet(p) || p.housenumber)))) close.push(p);
     else rest.push(p);
   }
-  close.sort((a, b) => a.dist - b.dist);
-  return [...pinned, ...close, ...rest].map(({ order, ...p }) => p);
+  // nome exatamente igual e perto de você antes de quem só contém as palavras ("Parque
+  // Ibirapuera" antes de "Lagoa Parque Ibirapuera"); o igual que está longe (bairro de mesmo
+  // nome em outro estado) volta para a ordem por distância. Dentro de cada grupo, do mais perto
+  // para o mais longe.
+  // (só com 2+ palavras: "farmácia" sozinha não deve pôr na frente um ponto sem nome chamado "Farmácia")
+  const partial = (p) => (q.length > 1 && tokens(p.name).join(' ') === qKey && p.dist <= nearM ? 0 : 1);
+  close.sort((a, b) => (isTransitStop(a) - isTransitStop(b)) || (partial(a) - partial(b)) || (a.dist - b.dist));
+  return [...pinned, ...address, ...close, ...rest].map(({ order, ...p }) => p);
+}
+
+/**
+ * Tira repetidos, mantendo o primeiro (o mais bem colocado):
+ * mesmo nome e mesmo endereço; trechos da mesma rua na mesma cidade (o OpenStreetMap divide
+ * as ruas em vários pedaços); a mesma cidade ou bairro vindo como ponto e como limite.
+ */
+export function dedupe(places) {
+  const out = [];
+  const key = (p) => tokens(p.name).join(' ');
+  const far = (a, b, m) => distance([a.lng, a.lat], [b.lng, b.lat]) > m;
+  for (const p of places) {
+    const k = key(p);
+    const dup = out.some((o) => key(o) === k && (
+      (p.address && p.address === o.address && !far(p, o, 300))
+      || (isStreet(p) && isStreet(o) && p.city === o.city && !far(p, o, 5000))
+      || (isArea(p) && isArea(o) && !far(p, o, 15000))));
+    if (!dup) out.push(p);
+  }
+  return out;
 }
 
 async function photon(params, signal) {
@@ -108,14 +170,23 @@ export async function search(query, near) {
     local = new URLSearchParams({ ...base, lat, lon, zoom: 14, location_bias_scale: 0.05,
       bbox: [near.lng - dLng, near.lat - dLat, near.lng + dLng, near.lat + dLat].map((v) => v.toFixed(4)).join(',') });
   }
-  const [gr, lr] = await Promise.allSettled([photon(global, signal), local ? photon(local, signal) : Promise.resolve([])]);
+  // "Rua Augusta 500": se o Photon não tiver aquele número, a busca com número às vezes não
+  // traz a rua; uma consulta a mais, só pela rua e só perto de você, garante a rua certa.
+  const { street, number } = splitHouseNumber(query);
+  let streetOnly = null;
+  if (local && number) { streetOnly = new URLSearchParams(local); streetOnly.set('q', street); }
+  const [gr, lr, sr] = await Promise.allSettled([
+    photon(global, signal),
+    local ? photon(local, signal) : Promise.resolve([]),
+    streetOnly ? photon(streetOnly, signal) : Promise.resolve([]),
+  ]);
   // busca substituída por outra mais nova: não devolve nada desta
   if (signal.aborted) throw Object.assign(new Error('Cancelado'), { name: 'AbortError' });
   if (gr.status === 'rejected' && (lr.status === 'rejected' || !lr.value.length)) throw gr.reason;
   const seen = new Set();
-  const merged = [...(gr.value || []), ...(lr.status === 'fulfilled' ? lr.value : [])]
+  const merged = [...(gr.value || []), ...(lr.status === 'fulfilled' ? lr.value : []), ...(sr.status === 'fulfilled' ? sr.value : [])]
     .filter((p) => (seen.has(p.id) ? false : seen.add(p.id)));
-  return rankResults(merged, query, near).slice(0, g.show);
+  return dedupe(rankResults(merged, query, near)).slice(0, g.show);
 }
 
 export async function reverse(lng, lat) {
